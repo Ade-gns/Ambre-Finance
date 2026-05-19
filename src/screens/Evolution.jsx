@@ -3,13 +3,29 @@
    - Table de comparaison année par année (Mai 2025 vs Mai 2026)
    - Small multiples : un sparkline par catégorie */
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { CATEGORIES, MONTHLY } from "../data/mockData";
 import { fmtEUR, pathSmooth, Sparkline } from "../lib/chartPrimitives";
 import { IcCalendar, IcChevDn } from "../lib/icons";
 
 export default function Evolution() {
   const [period, setPeriod] = useState("12m"); // 6m | 12m | 24m | YTD | cmp
+  const [catView, setCatView] = useState("monthly"); // "monthly" | "cumul"
+  const [dateOpen, setDateOpen] = useState(false);
+  const dateRef = useRef(null);
+  useEffect(() => {
+    if (!dateOpen) return;
+    const fn = e => { if (!dateRef.current?.contains(e.target)) setDateOpen(false); };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, [dateOpen]);
+  const PERIODS = [
+    { k: "6m",  label: "6 derniers mois",  range: "Déc. 2025 → Mai 2026" },
+    { k: "12m", label: "12 derniers mois", range: "Mai 2025 → Mai 2026" },
+    { k: "24m", label: "24 derniers mois", range: "Mai 2024 → Mai 2026" },
+    { k: "YTD", label: "Depuis janvier",   range: "Janv. → Mai 2026" },
+    { k: "cmp", label: "2025 vs 2026",     range: "Mai 2025 → Mai 2026" },
+  ];
 
   // Détermine combien de mois afficher selon la période
   // (avec MONTHLY qui contient 12 mois mockés, on simule en tronquant ou en répétant)
@@ -61,14 +77,34 @@ export default function Evolution() {
               </button>
             ))}
           </div>
-          <button className="ev-btn">
-            <IcCalendar size={14}/>
-            {period === "6m"  ? "Déc. 2025 → Mai 2026" :
-             period === "24m" ? "Mai 2024 → Mai 2026" :
-             period === "YTD" ? "Janv. → Mai 2026" :
-             "Mai 2025 → Mai 2026"}
-            <IcChevDn size={12}/>
-          </button>
+          <div ref={dateRef} style={{ position: "relative" }}>
+            <button className="ev-btn" onClick={() => setDateOpen(o => !o)}>
+              <IcCalendar size={14}/>
+              {PERIODS.find(p => p.k === period)?.range || "Mai 2025 → Mai 2026"}
+              <IcChevDn size={12}/>
+            </button>
+            {dateOpen && (
+              <div style={{
+                position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
+                background: "var(--cream-50)", border: "1px solid var(--line)",
+                borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+                minWidth: 220, overflow: "hidden",
+              }}>
+                {PERIODS.map(p => (
+                  <button key={p.k} style={{
+                    display: "flex", flexDirection: "column", gap: 1, width: "100%",
+                    padding: "10px 16px", background: p.k === period ? "var(--amber-100)" : "none",
+                    color: p.k === period ? "var(--amber-500)" : "var(--ink-800)",
+                    border: "none", borderBottom: "1px solid var(--line)", cursor: "pointer",
+                    textAlign: "left",
+                  }} onClick={() => { setPeriod(p.k); setDateOpen(false); }}>
+                    <span style={{ fontSize: 13 }}>{p.label}</span>
+                    <span style={{ fontSize: 11, color: "inherit", opacity: 0.7, fontFamily: "var(--font-mono)" }}>{p.range}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -76,7 +112,7 @@ export default function Evolution() {
       <div className="ev-hero">
         <div className="ev-hero-head">
           <div>
-            <div className="ev-card-t">Dépenses, revenus et solde net · 12 derniers mois</div>
+            <div className="ev-card-t">Dépenses, revenus et solde net · {PERIODS.find(p => p.k === period)?.label ?? "12 derniers mois"}</div>
             <div className="ev-card-s">
               Total dépensé · <strong style={{ color: "var(--ink-800)" }}>{fmtEUR(totalExp, 0)}</strong>
               {" · "}
@@ -148,16 +184,19 @@ export default function Evolution() {
               <div className="ev-card-s">12 mois · échelle propre à chaque catégorie</div>
             </div>
             <div className="ev-seg">
-              <button className="active">Mensuel</button>
-              <button>Cumulé</button>
+              <button className={catView === "monthly" ? "active" : ""} onClick={() => setCatView("monthly")}>Mensuel</button>
+              <button className={catView === "cumul" ? "active" : ""} onClick={() => setCatView("cumul")}>Cumulé</button>
             </div>
           </div>
           <div className="ev-grid">
             {catSeries.map(c => {
-              const max = Math.max(...c.values);
-              const cur = c.values[c.values.length - 1];
-              const prev = c.values[c.values.length - 2];
-              const delta = (cur - prev) / prev;
+              const displayVals = catView === "cumul"
+                ? c.values.reduce((acc, v) => { acc.push((acc[acc.length - 1] ?? 0) + v); return acc; }, [])
+                : c.values;
+              const max = Math.max(...displayVals);
+              const cur = displayVals[displayVals.length - 1];
+              const prev = displayVals[displayVals.length - 2];
+              const delta = prev ? (cur - prev) / prev : 0;
               return (
                 <div key={c.id} className="ev-tile">
                   <div className="ev-tile-h">
@@ -170,12 +209,12 @@ export default function Evolution() {
                     </span>
                   </div>
                   <div className="ev-tile-v">{fmtEUR(cur, 0)}</div>
-                  <Sparkline data={c.values} color={c.color} width={260} height={42}/>
+                  <Sparkline data={displayVals} color={c.color} width={260} height={42}/>
                   <div style={{
                     fontSize: 10, color: "var(--ink-500)", fontFamily: "var(--font-mono)",
                     display: "flex", justifyContent: "space-between"
                   }}>
-                    <span>min · {fmtEUR(Math.min(...c.values), 0)}</span>
+                    <span>min · {fmtEUR(Math.min(...displayVals), 0)}</span>
                     <span>max · {fmtEUR(max, 0)}</span>
                   </div>
                 </div>
@@ -245,13 +284,17 @@ function EvolutionHeroChart({ months, prev }) {
       <circle cx={incPts[incPts.length - 1][0]} cy={incPts[incPts.length - 1][1]} r="4"
               fill="#6b7a4f" stroke="var(--cream-50)" strokeWidth="2"/>
 
-      {/* Annotation décembre (pic) */}
-      <line x1={xs[6]} y1={expPts[6][1] - 6} x2={xs[6]} y2={padY + 4}
-            stroke="rgba(61,40,23,0.3)" strokeDasharray="2 3"/>
-      <text x={xs[6]} y={padY - 2} textAnchor="middle" fontSize="10"
-            fontFamily="var(--font-mono)" fill="var(--ink-700)">
-        pic · déc. {fmtEUR(months[6].exp, 0)}
-      </text>
+      {/* Annotation décembre (pic) — uniquement si le mois 6 est dans la sélection */}
+      {months.length > 6 && (
+        <>
+          <line x1={xs[6]} y1={expPts[6][1] - 6} x2={xs[6]} y2={padY + 4}
+                stroke="rgba(61,40,23,0.3)" strokeDasharray="2 3"/>
+          <text x={xs[6]} y={padY - 2} textAnchor="middle" fontSize="10"
+                fontFamily="var(--font-mono)" fill="var(--ink-700)">
+            pic · déc. {fmtEUR(months[6].exp, 0)}
+          </text>
+        </>
+      )}
 
       {/* Labels des mois */}
       {months.map((m, i) => (

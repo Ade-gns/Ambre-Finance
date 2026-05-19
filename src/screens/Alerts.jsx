@@ -5,7 +5,8 @@
    - "Tout marquer comme lu" — vide les non-lues d'un coup
    - Compteurs KPI mis à jour en live */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useLocalStorage } from "../lib/storage";
 import {
   IcBell, IcSettings, IcFilter, IcCalendar, IcChevDn
@@ -19,43 +20,43 @@ const KIND_STYLES = {
 };
 
 const INITIAL_ALERTS = [
-  { id: 1, day: "Aujourd'hui · 14 mai", thisWeek: true,
+  { id: 1, day: "Aujourd'hui · 14 mai", thisWeek: true, month: "Mai 2026",
     time: "14:32", kind: "threshold", name: "Loisirs · seuil 85 %",
     cat: { label: "Loisirs", color: "#a85a48" },
     msg: "97 % du budget mensuel atteint (96,80 € / 100 €). Il reste 17 jours.",
     source: "Le Petit Café · −14,20 €",
     state: "unread", cta: "Ajuster le budget" },
-  { id: 2, day: "Aujourd'hui · 14 mai", thisWeek: true,
+  { id: 2, day: "Aujourd'hui · 14 mai", thisWeek: true, month: "Mai 2026",
     time: "10:11", kind: "anomaly", name: "Transaction inhabituelle détectée",
     cat: { label: "Loisirs", color: "#a85a48" },
     msg: "FNAC.COM · 229,90 € — montant supérieur à votre moyenne pour cette catégorie.",
     source: "11 mai · Carte BNP",
     state: "unread", cta: "Voir la transaction" },
-  { id: 3, day: "Hier · 13 mai", thisWeek: true,
+  { id: 3, day: "Hier · 13 mai", thisWeek: true, month: "Mai 2026",
     time: "18:04", kind: "event", name: "Salaire reçu",
     cat: { label: "Revenus", color: "#6b7a4f" },
     msg: "Virement Dupont SAS · +2 560,00 €. Détecté automatiquement comme récurrent.",
     source: "Compte courant BNP",
     state: "read", cta: "Voir le détail" },
-  { id: 4, day: "Hier · 13 mai", thisWeek: true,
+  { id: 4, day: "Hier · 13 mai", thisWeek: true, month: "Mai 2026",
     time: "09:47", kind: "threshold", name: "Alimentation · seuil 90 %",
     cat: { label: "Alimentation", color: "#b8693d" },
     msg: "450 € dépensés sur 500 € de budget. Vous êtes dans la trajectoire moyenne.",
     source: "Carrefour Market · −52,34 €",
     state: "read", cta: "Ajuster le budget" },
-  { id: 5, day: "Cette semaine · 11 mai", thisWeek: true,
+  { id: 5, day: "Cette semaine · 11 mai", thisWeek: true, month: "Mai 2026",
     time: "Dim. 22h", kind: "event", name: "Nouvel abonnement détecté",
     cat: { label: "Abonnements", color: "#cd8459" },
     msg: "« SPOTIFY » apparaît pour la 3e fois consécutive — créer une règle Abonnements ?",
     source: "Spotify Premium · 10,99 €/mois",
     state: "read", cta: "Créer la règle" },
-  { id: 6, day: "Cette semaine · 11 mai", thisWeek: true,
+  { id: 6, day: "Cette semaine · 11 mai", thisWeek: true, month: "Mai 2026",
     time: "Sam. 19h", kind: "duplicate", name: "Doublon potentiel",
     cat: { label: "Loisirs", color: "#a85a48" },
     msg: "Deux transactions Cinéma MK2 identiques en 48h. Vérifier s'il s'agit d'un doublon.",
     source: "10 mai · 22,00 € · 22,00 €",
     state: "read", cta: "Comparer" },
-  { id: 7, day: "07 – 09 mai", thisWeek: false,
+  { id: 7, day: "07 – 09 mai", thisWeek: false, month: "Mai 2026",
     time: "09/05 · 11:20", kind: "anomaly", name: "Catégorie inhabituelle",
     cat: { label: "Santé", color: "#9d8b73" },
     msg: "Premier mouvement dans la catégorie Santé ce mois — créer un budget ?",
@@ -104,6 +105,36 @@ function AlertKindIcon({ kind }) {
 export default function Alerts() {
   const [alerts, setAlerts] = useLocalStorage("alerts", INITIAL_ALERTS);
   const [filter, setFilter] = useState("all");
+  const navigate = useNavigate();
+  const [catOpen, setCatOpen] = useState(false);
+  const [monthOpen, setMonthOpen] = useState(false);
+  const [selCat, setSelCat] = useState(null);
+  const [selMonth, setSelMonth] = useState(null);
+  const catRef   = useRef(null);
+  const monthRef = useRef(null);
+  useEffect(() => {
+    if (!catOpen) return;
+    const fn = e => { if (!catRef.current?.contains(e.target)) setCatOpen(false); };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, [catOpen]);
+  useEffect(() => {
+    if (!monthOpen) return;
+    const fn = e => { if (!monthRef.current?.contains(e.target)) setMonthOpen(false); };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, [monthOpen]);
+  const CAT_LIST = [
+    { label: "Toutes",       color: null },
+    { label: "Alimentation", color: "#b8693d" },
+    { label: "Loisirs",      color: "#a85a48" },
+    { label: "Abonnements",  color: "#cd8459" },
+    { label: "Revenus",      color: "#6b7a4f" },
+    { label: "Santé",        color: "#9d8b73" },
+    { label: "Logement",     color: "#3d2817" },
+    { label: "Transports",   color: "#7a8c5c" },
+  ];
+  const MONTH_LIST = [null, "Mai 2026","Avril 2026","Mars 2026","Février 2026","Janvier 2026","Décembre 2025"];
 
   const markAsRead = (id) => {
     setAlerts(alerts.map(a => a.id === id ? { ...a, state: "read" } : a));
@@ -116,12 +147,16 @@ export default function Alerts() {
   };
 
   const visible = useMemo(() => {
-    if (filter === "all")      return alerts.filter(a => a.state !== "archived");
-    if (filter === "unread")   return alerts.filter(a => a.state === "unread");
-    if (filter === "thisweek") return alerts.filter(a => a.thisWeek && a.state !== "archived");
-    if (filter === "archived") return alerts.filter(a => a.state === "archived");
-    return alerts;
-  }, [alerts, filter]);
+    let result;
+    if (filter === "all")           result = alerts.filter(a => a.state !== "archived");
+    else if (filter === "unread")   result = alerts.filter(a => a.state === "unread");
+    else if (filter === "thisweek") result = alerts.filter(a => a.thisWeek && a.state !== "archived");
+    else if (filter === "archived") result = alerts.filter(a => a.state === "archived");
+    else result = [...alerts];
+    if (selCat)   result = result.filter(a => a.cat.label === selCat);
+    if (selMonth) result = result.filter(a => a.month === selMonth);
+    return result;
+  }, [alerts, filter, selCat, selMonth]);
 
   const counts = useMemo(() => ({
     all:      alerts.filter(a => a.state !== "archived").length,
@@ -165,7 +200,9 @@ export default function Alerts() {
                   style={counts.unread === 0 ? { opacity: 0.5, cursor: "not-allowed" } : {}}>
             Tout marquer comme lu
           </button>
-          <button className="ah-btn"><IcSettings size={13}/>Configurer les alertes</button>
+          <button className="ah-btn" onClick={() => navigate("/settings")}>
+            <IcSettings size={13}/>Configurer les alertes
+          </button>
         </div>
       </div>
 
@@ -215,13 +252,61 @@ export default function Alerts() {
           ))}
         </div>
         <div style={{ flex: 1 }}/>
-        <button className="ah-btn"><IcFilter size={13}/>Par catégorie</button>
-        <button className="ah-btn"><IcCalendar size={13}/>Mai 2026 <IcChevDn size={12}/></button>
+        <div ref={catRef} style={{ position: "relative" }}>
+          <button className="ah-btn" onClick={() => setCatOpen(o => !o)}>
+            <IcFilter size={13}/>
+            {selCat || "Par catégorie"}
+          </button>
+          {catOpen && (
+            <div style={{
+              position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
+              background: "var(--cream-50)", border: "1px solid var(--line)",
+              borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+              minWidth: 190, overflow: "hidden",
+            }}>
+              {CAT_LIST.map(c => (
+                <button key={c.label} style={{
+                  display: "flex", alignItems: "center", gap: 10, width: "100%",
+                  padding: "9px 14px", background: selCat === c.label || (!selCat && !c.color) ? "var(--amber-100)" : "none",
+                  color: selCat === c.label || (!selCat && !c.color) ? "var(--amber-500)" : "var(--ink-800)",
+                  border: "none", borderBottom: "1px solid var(--line)", cursor: "pointer", fontSize: 13,
+                }} onClick={() => { setSelCat(c.color ? c.label : null); setCatOpen(false); }}>
+                  {c.color && <span className="amb-dot" style={{ background: c.color }}/>}
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div ref={monthRef} style={{ position: "relative" }}>
+          <button className="ah-btn" onClick={() => setMonthOpen(o => !o)}>
+            <IcCalendar size={13}/>{selMonth || "Mois"} <IcChevDn size={12}/>
+          </button>
+          {monthOpen && (
+            <div style={{
+              position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
+              background: "var(--cream-50)", border: "1px solid var(--line)",
+              borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+              minWidth: 180, overflow: "hidden",
+            }}>
+              {MONTH_LIST.map(m => (
+                <button key={m ?? "all"} style={{
+                  display: "block", width: "100%", padding: "9px 16px",
+                  background: m === selMonth ? "var(--amber-100)" : "none",
+                  color: m === selMonth ? "var(--amber-500)" : "var(--ink-800)",
+                  border: "none", borderBottom: "1px solid var(--line)", cursor: "pointer", fontSize: 13, textAlign: "left",
+                }} onClick={() => { setSelMonth(m); setMonthOpen(false); }}>
+                  {m ?? "Tous les mois"}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="ah-timeline">
         {grouped.length === 0 ? (
-          <EmptyAlerts filter={filter}/>
+          <EmptyAlerts filter={filter} selCat={selCat} selMonth={selMonth}/>
         ) : (
           grouped.map(d => (
             <div key={d.day}>
@@ -297,14 +382,18 @@ export default function Alerts() {
   );
 }
 
-function EmptyAlerts({ filter }) {
+function EmptyAlerts({ filter, selCat, selMonth }) {
   const msgs = {
     all:      { t: "Aucune alerte active",        s: "Vos finances sont sereines pour le moment." },
     unread:   { t: "Tout est lu ✓",               s: "Plus aucune alerte non lue. Bon travail !" },
     thisweek: { t: "Aucune alerte cette semaine", s: "La semaine s'annonce calme côté finances." },
     archived: { t: "Rien dans les archives",      s: "Les alertes archivées apparaîtront ici." },
   };
-  const m = msgs[filter];
+  const hasCombinedFilter = selCat || selMonth;
+  const m = hasCombinedFilter
+    ? { t: "Aucun résultat",
+        s: `Aucune alerte${selCat ? ` pour « ${selCat} »` : ""}${selMonth ? ` en ${selMonth}` : ""}.` }
+    : msgs[filter];
   return (
     <div style={{
       padding: "60px 24px",

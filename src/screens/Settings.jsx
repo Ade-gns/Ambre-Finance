@@ -6,7 +6,7 @@
    5. app  — Apparence (thème, couleur d'accent, typographie)
    6. abt  — À propos */
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocalStorage } from "../lib/storage";
 import { fmtEUR } from "../lib/chartPrimitives";
 import {
@@ -86,6 +86,18 @@ function SettingsGeneral() {
   const [verrouiller, setVerrouiller]   = useLocalStorage("stg.verrouiller", false);
   const [lancer, setLancer]             = useLocalStorage("stg.lancer", false);
   const [saved, setSaved]               = useState(false);
+  const [lang, setLang]                 = useLocalStorage("stg.lang", "fr");
+  const [tz, setTz]                     = useLocalStorage("stg.tz", "Europe/Paris");
+  const [homeScreen, setHomeScreen]     = useLocalStorage("stg.homeScreen", "Tableau de bord");
+  const [homeOpen, setHomeOpen]         = useState(false);
+  const homeRef                         = useRef(null);
+  const HOME_OPTIONS = ["Tableau de bord", "Transactions", "Catégories", "Évolution", "Alertes"];
+  useEffect(() => {
+    if (!homeOpen) return;
+    const fn = e => { if (!homeRef.current?.contains(e.target)) setHomeOpen(false); };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, [homeOpen]);
 
   const handleSave = () => {
     setSaved(true);
@@ -130,7 +142,13 @@ function SettingsGeneral() {
               <div className="stg-row-sub">Le redémarrage est automatique.</div>
             </div>
             <div className="stg-row-ctrl">
-              <span className="stg-select">🇫🇷 Français <IcChevDn size={12}/></span>
+              <select className="stg-select" style={{ appearance: "none", WebkitAppearance: "none", cursor: "pointer" }}
+                      value={lang} onChange={e => setLang(e.target.value)}>
+                <option value="fr">🇫🇷 Français</option>
+                <option value="en">🇬🇧 English</option>
+                <option value="de">🇩🇪 Deutsch</option>
+                <option value="es">🇪🇸 Español</option>
+              </select>
               <span style={{ fontSize: 11, color: "var(--ink-500)" }}>EN, DE et ES disponibles</span>
             </div>
           </div>
@@ -140,7 +158,14 @@ function SettingsGeneral() {
               <div className="stg-row-sub">Détecté depuis votre système.</div>
             </div>
             <div className="stg-row-ctrl">
-              <span className="stg-select">Europe / Paris · UTC+2 <IcChevDn size={12}/></span>
+              <select className="stg-select" style={{ appearance: "none", WebkitAppearance: "none", cursor: "pointer" }}
+                      value={tz} onChange={e => setTz(e.target.value)}>
+                <option value="Europe/Paris">Europe / Paris · UTC+2</option>
+                <option value="Europe/London">Europe / London · UTC+1</option>
+                <option value="America/New_York">America / New York · UTC-4</option>
+                <option value="America/Los_Angeles">America / Los Angeles · UTC-7</option>
+                <option value="Asia/Tokyo">Asia / Tokyo · UTC+9</option>
+              </select>
             </div>
           </div>
         </div>
@@ -206,7 +231,30 @@ function SettingsGeneral() {
               <div className="stg-row-sub">Première page affichée au lancement.</div>
             </div>
             <div className="stg-row-ctrl">
-              <span className="stg-select">Tableau de bord <IcChevDn size={12}/></span>
+              <div ref={homeRef} style={{ position: "relative" }}>
+                <span className="stg-select" style={{ cursor: "pointer" }}
+                      onClick={() => setHomeOpen(o => !o)}>
+                  {homeScreen} <IcChevDn size={12}/>
+                </span>
+                {homeOpen && (
+                  <div style={{
+                    position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 50,
+                    background: "var(--cream-50)", border: "1px solid var(--line)",
+                    borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+                    minWidth: 200, overflow: "hidden",
+                  }}>
+                    {HOME_OPTIONS.map(opt => (
+                      <button key={opt} style={{
+                        display: "block", width: "100%", padding: "9px 14px",
+                        background: opt === homeScreen ? "var(--amber-100)" : "none",
+                        color: opt === homeScreen ? "var(--amber-500)" : "var(--ink-800)",
+                        border: "none", borderBottom: "1px solid var(--line)",
+                        cursor: "pointer", fontSize: 13, textAlign: "left",
+                      }} onClick={() => { setHomeScreen(opt); setHomeOpen(false); }}>{opt}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <div className="stg-row">
@@ -246,6 +294,21 @@ function SettingsAccounts() {
   const [editId, setEditId]           = useState(null);
   const [draft, setDraft]             = useState({});
   const [deleteId, setDeleteId]       = useState(null);
+  const [showAddAccount, setShowAddAccount] = useState(false);
+  const [newAccName, setNewAccName]   = useState("");
+  const [newAccBank, setNewAccBank]   = useState("");
+  const [newAccType, setNewAccType]   = useState("Courant");
+  const [newAccColor, setNewAccColor] = useState("#b8693d");
+  const ACC_COLORS = ["#b8693d","#cd8459","#6b7a4f","#3d2817","#9d8b73","#a85a48"];
+  const createAccount = () => {
+    if (!newAccName.trim() || !newAccBank.trim()) return;
+    setAccounts(prev => [...prev, {
+      id: Date.now(), name: newAccName.trim(), bank: newAccBank.trim(),
+      type: newAccType, color: newAccColor, bal: 0, last: "—", tx: 0, parser: "CSV", on: true,
+    }]);
+    setNewAccName(""); setNewAccBank(""); setNewAccType("Courant"); setNewAccColor("#b8693d");
+    setShowAddAccount(false);
+  };
 
   const toggleAccount = id => setAccounts(prev => prev.map(a => a.id === id ? { ...a, on: !a.on } : a));
 
@@ -264,7 +327,7 @@ function SettingsAccounts() {
       <SubHeader
         breadcrumb="Comptes & banques"
         title='Mes <em>comptes</em>.'
-        actions={<button className="stg-btn amber"><IcPlus size={14}/>Ajouter un compte</button>}
+        actions={<button className="stg-btn amber" onClick={() => setShowAddAccount(true)}><IcPlus size={14}/>Ajouter un compte</button>}
       />
 
       <div className="stg-card">
@@ -381,6 +444,76 @@ function SettingsAccounts() {
           <span style={{ marginLeft: 12, color: "var(--ink-500)" }}>· 2 parseurs chargés</span>
         </div>
       </div>
+
+      {/* Modal — ajouter un compte */}
+      {showAddAccount && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 200,
+          background: "rgba(61,40,23,0.35)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }} onClick={() => setShowAddAccount(false)}>
+          <div style={{
+            background: "var(--cream-50)", borderRadius: 16,
+            padding: "28px 32px", width: 440,
+            boxShadow: "0 24px 60px rgba(61,40,23,0.18)",
+            display: "flex", flexDirection: "column", gap: 20,
+          }} onClick={e => e.stopPropagation()}>
+            <div>
+              <div style={{ fontSize: 17, fontFamily: "var(--font-display)", color: "var(--ink-900)" }}>
+                Ajouter un compte
+              </div>
+              <div style={{ fontSize: 12, color: "var(--ink-500)", marginTop: 4 }}>
+                Aucune connexion bancaire — vos données restent en local.
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--ink-600)", textTransform: "uppercase",
+                                letterSpacing: "0.08em", display: "block", marginBottom: 6 }}>Nom du compte</label>
+                <input className="stg-input" style={{ width: "100%", boxSizing: "border-box" }}
+                       placeholder="ex. Compte courant, Livret A…"
+                       value={newAccName} onChange={e => setNewAccName(e.target.value)} autoFocus/>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--ink-600)", textTransform: "uppercase",
+                                letterSpacing: "0.08em", display: "block", marginBottom: 6 }}>Banque</label>
+                <input className="stg-input" style={{ width: "100%", boxSizing: "border-box" }}
+                       placeholder="ex. BNP Paribas, Boursorama…"
+                       value={newAccBank} onChange={e => setNewAccBank(e.target.value)}/>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--ink-600)", textTransform: "uppercase",
+                                letterSpacing: "0.08em", display: "block", marginBottom: 6 }}>Type</label>
+                <select className="stg-input" style={{ width: "100%", boxSizing: "border-box" }}
+                        value={newAccType} onChange={e => setNewAccType(e.target.value)}>
+                  {["Courant", "Épargne", "Investissement", "E-money"].map(t => (
+                    <option key={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--ink-600)", textTransform: "uppercase",
+                                letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>Couleur</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {ACC_COLORS.map(c => (
+                    <span key={c} onClick={() => setNewAccColor(c)} style={{
+                      width: 30, height: 30, borderRadius: 8, background: c, cursor: "pointer",
+                      border: c === newAccColor ? "2.5px solid var(--ink-900)" : "2px solid transparent",
+                    }}/>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="stg-btn" onClick={() => setShowAddAccount(false)}>Annuler</button>
+              <button className="stg-btn amber" onClick={createAccount}
+                      style={{ opacity: newAccName.trim() && newAccBank.trim() ? 1 : 0.5 }}>
+                <IcPlus size={13}/>Ajouter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -674,6 +807,12 @@ function SettingsBackup() {
   const [backupRun, setBackupRun]     = useState("idle");   // idle | running | done
   const [exportDone, setExportDone]   = useState(null);     // null | ".csv" | ...
   const [danger, setDanger]           = useState(null);     // null | "tx" | "cat" | "all"
+  const [dbPath, setDbPath]           = useState("ambre.db");
+  const [backupFolder, setBackupFolder] = useState("~/Documents/Ambre-backups/");
+  const [restoreMsg, setRestoreMsg]   = useState(null);
+  const dbFileRef                     = useRef(null);
+  const backupFolderRef               = useRef(null);
+  const restoreRef                    = useRef(null);
 
   const checkIntegrity = () => {
     setIntegrity("checking");
@@ -769,9 +908,11 @@ function SettingsBackup() {
           <div className="stg-row-ctrl">
             <code style={{ fontSize: 12, color: "var(--ink-700)", background: "var(--cream-100)",
                           padding: "6px 10px", borderRadius: 6, fontFamily: "var(--font-mono)" }}>
-              ~/.local/share/ambre/<strong style={{ color: "var(--amber-500)" }}>ambre.db</strong>
+              ~/.local/share/ambre/<strong style={{ color: "var(--amber-500)" }}>{dbPath}</strong>
             </code>
-            <button className="stg-btn">Changer…</button>
+            <input ref={dbFileRef} type="file" accept=".db,.sqlite" style={{ display: "none" }}
+                   onChange={e => { if (e.target.files[0]) setDbPath(e.target.files[0].name); }}/>
+            <button className="stg-btn" onClick={() => dbFileRef.current?.click()}>Changer…</button>
           </div>
         </div>
       </div>
@@ -812,9 +953,11 @@ function SettingsBackup() {
             <div className="stg-row-ctrl">
               <code style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--ink-700)",
                             background: "var(--cream-100)", padding: "6px 10px", borderRadius: 6 }}>
-                ~/Documents/Ambre-backups/
+                {backupFolder}
               </code>
-              <button className="stg-btn">Parcourir…</button>
+              <input ref={backupFolderRef} type="file" style={{ display: "none" }}
+                     onChange={e => { if (e.target.files[0]) setBackupFolder("~/" + e.target.files[0].name.split("/").slice(0, -1).join("/") || "~/Documents/Ambre-backups/"); }}/>
+              <button className="stg-btn" onClick={() => backupFolderRef.current?.click()}>Parcourir…</button>
             </div>
           </div>
         </div>
@@ -832,7 +975,17 @@ function SettingsBackup() {
             : backupRun === "done"   ? "✓ Sauvegarde créée"
             :                          "Lancer une sauvegarde maintenant"}
           </button>
-          <button className="stg-btn"><IcImport size={13}/>Restaurer depuis une sauvegarde</button>
+          <input ref={restoreRef} type="file" accept=".json,.sqlite,.db" style={{ display: "none" }}
+                 onChange={e => {
+                   if (e.target.files[0]) {
+                     setRestoreMsg("✓ Fichier sélectionné : " + e.target.files[0].name);
+                     setTimeout(() => setRestoreMsg(null), 3000);
+                   }
+                 }}/>
+          <button className="stg-btn" onClick={() => restoreRef.current?.click()}
+                  style={restoreMsg ? { color: "var(--sage-500)", borderColor: "rgba(107,122,79,0.4)" } : {}}>
+            <IcImport size={13}/>{restoreMsg || "Restaurer depuis une sauvegarde"}
+          </button>
         </div>
       </div>
 

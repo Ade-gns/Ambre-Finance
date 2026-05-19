@@ -99,7 +99,7 @@ export default function Dashboard() {
           padding: 7px 12px;
           border: 1px solid var(--line); border-radius: 8px;
           background: var(--cream-50); color: var(--ink-700);
-          font-size: 12px;
+          font-size: 12px; cursor: pointer;
         }
         .atc-btn.amber {
           background: var(--amber-500);
@@ -298,10 +298,15 @@ export default function Dashboard() {
       <div className="atc-hero">
         <div className="atc-card atc-hero-big">
           <div>
-            <div className="atc-hero-l">Dépensé · Mai 2026</div>
-            <div className="atc-hero-v">
-              <span className="cur">€</span>1 739<span className="cents">,89</span>
-            </div>
+            <div className="atc-hero-l">Dépensé · {info.full}</div>
+            {(() => {
+              const [intPart, decPart] = fmtEUR(totalExp, 2).replace(/\s?€/, "").split(",");
+              return (
+                <div className="atc-hero-v">
+                  <span className="cur">€</span>{intPart}<span className="cents">,{decPart}</span>
+                </div>
+              );
+            })()}
           </div>
           <div className="atc-hero-meta">
             {prev && (
@@ -358,7 +363,7 @@ export default function Dashboard() {
             <div className="atc-card-h">
               <div>
                 <div className="atc-card-t">Calendrier des dépenses</div>
-                <div className="atc-card-s">intensité par jour · mai 2026</div>
+                <div className="atc-card-s">intensité par jour · {info.full.toLowerCase()}</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: "var(--ink-500)" }}>
                 <span>−</span>

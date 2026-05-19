@@ -3,7 +3,8 @@
    2. detail — vue par catégorie (KPIs, courbe, sous-cats, marchands, transactions)
    3. empty  — catégorie créée mais sans transactions (avec suggestions) */
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { CATEGORIES, TRANSACTIONS } from "../data/mockData";
 import { fmtEUR, pathSmooth } from "../lib/chartPrimitives";
 import {
@@ -11,70 +12,151 @@ import {
   IcPlus, IcTag, IcSettings, IcChart, IcWallet
 } from "../lib/icons";
 
+const CAT_ICON_LIST = [
+  { key: "bag",    el: s => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8l2-5h14l2 5"/><path d="M3 8v12a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8"/><circle cx="12" cy="14" r="3"/></svg> },
+  { key: "tag",    el: s => <IcTag size={s}/> },
+  { key: "wallet", el: s => <IcWallet size={s}/> },
+  { key: "cal",    el: s => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8h12v12H6z"/><path d="M9 3v5M15 3v5"/></svg> },
+  { key: "pin",    el: s => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="9" r="6"/><path d="M9 21l3-5 3 5"/></svg> },
+  { key: "home",   el: s => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12a7 7 0 0 1 14 0v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/></svg> },
+  { key: "chart",  el: s => <IcChart size={s}/> },
+];
+
+const ALL_CATS = [
+  ...CATEGORIES.map(c => ({ ...c })),
+  { id: "epa", label: "Épargne",     color: "#9d8b73", amount: 300.00, share: 0.10, desc: "Épargne et placements" },
+  { id: "fou", label: "Restaurants", color: "#a85a48", amount: 68.50,  share: 0.04, desc: "Restaurants et snacks" },
+  { id: "edu", label: "Éducation",   color: "#7a5c3a", amount: 0,      share: 0,    desc: "Frais de scolarité, livres, cours en ligne, abonnements éducatifs" },
+];
+
 export default function Categories() {
-  const [state, setState] = useState("manage"); // manage | detail | empty
+  const [view, setView]                   = useState("manage"); // manage | detail | empty
+  const [selectedCatId, setSelectedCatId] = useState("alim");
+
+  const selectedCat = ALL_CATS.find(c => c.id === selectedCatId) ?? ALL_CATS[0];
 
   return (
     <>
-      <DemoStateSwitcher current={state} onChange={setState} />
-
-      {state === "manage" && <CatManage onSeeDetail={() => setState("detail")}
-                                        onSeeEmpty={() => setState("empty")} />}
-      {state === "detail" && <CatDetail onBack={() => setState("manage")} />}
-      {state === "empty"  && <CatEmpty  onBack={() => setState("manage")} />}
+      {view === "manage" && (
+        <CatManage
+          selectedCatId={selectedCatId}
+          onSelectCat={id => {
+            setSelectedCatId(id);
+          }}
+          onSeeDetail={() => setView("detail")}
+          onSeeEmpty={() => setView("empty")}
+        />
+      )}
+      {view === "detail" && <CatDetail cat={selectedCat} onBack={() => setView("manage")} />}
+      {view === "empty"  && <CatEmpty  cat={selectedCat} onBack={() => setView("manage")} />}
     </>
   );
 }
 
-/* ─────────────────────────────────────────────────────────────────
-   Barre de switch temporaire (mode démo)
-   ───────────────────────────────────────────────────────────────── */
-function DemoStateSwitcher({ current, onChange }) {
-  const states = [
-    { key: "manage", label: "1. Gestion" },
-    { key: "detail", label: "2. Détail" },
-    { key: "empty",  label: "3. Vide" },
-  ];
-  return (
-    <div style={{
-      position: "fixed", top: 8, right: 16, zIndex: 100,
-      display: "flex", gap: 4, padding: 4,
-      background: "rgba(255,255,255,0.9)", backdropFilter: "blur(8px)",
-      border: "1px solid var(--line)", borderRadius: 8, fontSize: 11,
-    }}>
-      <span style={{ padding: "4px 8px", color: "var(--ink-500)",
-                     letterSpacing: "0.04em", textTransform: "uppercase" }}>Démo</span>
-      {states.map(s => (
-        <button key={s.key} onClick={() => onChange(s.key)} style={{
-          padding: "4px 10px", borderRadius: 5, fontSize: 11,
-          background: current === s.key ? "var(--amber-500)" : "transparent",
-          color: current === s.key ? "var(--cream-50)" : "var(--ink-700)",
-          border: "none", cursor: "pointer",
-        }}>{s.label}</button>
-      ))}
-    </div>
-  );
+function downloadCSV(filename, csvText) {
+  const a = document.createElement("a");
+  a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(csvText);
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function exportCatsCSV(cats) {
+  const header = "ID,Nom,Couleur,Montant ce mois,Part";
+  const rows   = cats.map(c => [c.id, `"${c.label}"`, c.color, c.amount || 0, c.share || 0].join(","));
+  downloadCSV("categories.csv", header + "\n" + rows.join("\n"));
 }
 
 /* ─────────────────────────────────────────────────────────────────
    Vue 1 — Gestion des catégories (liste + édition + règles)
    ───────────────────────────────────────────────────────────────── */
-function CatManage({ onSeeDetail, onSeeEmpty }) {
-  const allCats = [
-    ...CATEGORIES.map(c => ({ ...c })),
-    { id: "epa", label: "Épargne",     color: "#9d8b73", amount: 300.00, share: 0.10 },
-    { id: "fou", label: "Restaurants", color: "#a85a48", amount: 68.50,  share: 0.04 },
-    { id: "edu", label: "Éducation",   color: "#7a5c3a", amount: 0,      share: 0 },
-  ];
-  const selected = allCats.find(c => c.id === "alim");
+function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty }) {
+  const [userCats, setUserCats]   = useState([]);
+  const [deletedIds, setDeletedIds] = useState(new Set());
+  const [newOpen, setNewOpen]     = useState(false);
+  const [newName, setNewName]     = useState("");
+  const [newColor, setNewColor]   = useState("#b8693d");
+  const [ioOpen, setIoOpen]       = useState(false);
+  const [exported, setExported]   = useState(false);
+  const [sortMode, setSortMode]   = useState("default");
+  const [sortOpen, setSortOpen]   = useState(false);
+  const [catSearch, setCatSearch] = useState("");
+  const [catEdits, setCatEdits]   = useState({});
+  const fileInputRef              = useRef(null);
+  const sortRef                   = useRef(null);
+  const ioRef                     = useRef(null);
 
-  const rules = [
-    { id: 1, when: "libellé contient", op: "carrefour",                to: "alim", auto: 14, last: "14/05" },
-    { id: 2, when: "libellé contient", op: "monoprix",                 to: "alim", auto: 8,  last: "07/05" },
-    { id: 3, when: "libellé contient", op: "boulangerie OU patisserie", to: "alim", auto: 12, last: "10/05" },
-    { id: 4, when: "marchand =",       op: "Auchan Drive",              to: "alim", auto: 6,  last: "05/05" },
-    { id: 5, when: "libellé contient", op: "fnac.com",                  to: "loi",  auto: 3,  last: "11/05" },
-  ];
+  const updateCatProp = (id, prop, val) =>
+    setCatEdits(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [prop]: val } }));
+
+  // Rules state
+  const [rules, setRules] = useState([
+    { id: 1, when: "libellé contient", op: "carrefour",                 to: "alim", auto: 14, last: "14/05", active: true },
+    { id: 2, when: "libellé contient", op: "monoprix",                  to: "alim", auto: 8,  last: "07/05", active: true },
+    { id: 3, when: "libellé contient", op: "boulangerie OU patisserie", to: "alim", auto: 12, last: "10/05", active: true },
+    { id: 4, when: "marchand =",       op: "Auchan Drive",              to: "alim", auto: 6,  last: "05/05", active: true },
+    { id: 5, when: "libellé contient", op: "fnac.com",                  to: "loi",  auto: 3,  last: "11/05", active: true },
+  ]);
+  const [editRuleId, setEditRuleId]   = useState(null);
+  const [editDraft, setEditDraft]     = useState({});
+  const [ruleFormOpen, setRuleFormOpen] = useState(false);
+  const [newWhen, setNewWhen]         = useState("libellé contient");
+  const [newOp, setNewOp]             = useState("");
+
+  const toggleRule  = id => setRules(prev => prev.map(r => r.id === id ? { ...r, active: !r.active } : r));
+  const deleteRule  = id => setRules(prev => prev.filter(r => r.id !== id));
+  const startEditRule = r => { setEditRuleId(r.id); setEditDraft({ when: r.when, op: r.op }); };
+  const saveEditRule  = () => { setRules(prev => prev.map(r => r.id === editRuleId ? { ...r, ...editDraft } : r)); setEditRuleId(null); };
+  const createRule = () => {
+    if (!newOp.trim()) return;
+    setRules(prev => [...prev, { id: Date.now(), when: newWhen, op: newOp.trim(), to: selected?.id ?? "alim", auto: 0, last: "—", active: true }]);
+    setNewOp(""); setNewWhen("libellé contient"); setRuleFormOpen(false);
+  };
+
+  useEffect(() => {
+    if (!sortOpen) return;
+    const fn = e => { if (!sortRef.current?.contains(e.target)) setSortOpen(false); };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, [sortOpen]);
+
+  useEffect(() => {
+    if (!ioOpen) return;
+    const fn = e => { if (!ioRef.current?.contains(e.target)) setIoOpen(false); };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, [ioOpen]);
+
+  const allCats = [...ALL_CATS, ...userCats]
+    .filter(c => !deletedIds.has(c.id))
+    .map(c => ({ ...c, ...(catEdits[c.id] || {}) }))
+    .filter(c => !catSearch || c.label.toLowerCase().includes(catSearch.toLowerCase()))
+    .sort((a, b) => {
+      if (sortMode === "alpha")  return a.label.localeCompare(b.label, "fr");
+      if (sortMode === "amount") return (b.amount || 0) - (a.amount || 0);
+      return 0;
+    });
+  const selected = allCats.find(c => c.id === selectedCatId) ?? allCats[0];
+
+  const deleteCat = id => {
+    const next = allCats.find(c => c.id !== id);
+    setDeletedIds(prev => new Set([...prev, id]));
+    if (next) onSelectCat(next.id);
+  };
+
+  const createCat = () => {
+    if (!newName.trim()) return;
+    const id = "usr_" + Date.now();
+    setUserCats(prev => [...prev, { id, label: newName.trim(), color: newColor, amount: 0, share: 0, desc: "" }]);
+    onSelectCat(id);
+    setNewName("");
+    setNewColor("#b8693d");
+    setNewOpen(false);
+  };
+
+  const catRules = rules.filter(r => r.to === selected.id);
 
   const colorOptions = ["#b8693d","#cd8459","#a85a48","#3d2817","#6b7a4f","#7a5c3a","#9d8b73","#d4a76a"];
 
@@ -88,8 +170,46 @@ function CatManage({ onSeeDetail, onSeeEmpty }) {
           <h1 className="cm-h1">Gérer mes <em>catégories</em>.</h1>
         </div>
         <div className="cm-tool">
-          <button className="cm-btn">Importer / Exporter</button>
-          <button className="cm-btn amber"><IcPlus size={14}/>Nouvelle catégorie</button>
+          <div ref={ioRef} style={{ position: "relative" }}>
+            <button className="cm-btn" onClick={() => { setIoOpen(o => !o); setExported(false); }}>
+              Importer / Exporter
+              <IcChevDn size={11}/>
+            </button>
+            {ioOpen && (
+              <div style={{
+                position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 50,
+                background: "var(--cream-50)", border: "1px solid var(--line)",
+                borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+                minWidth: 200, overflow: "hidden",
+              }}>
+                <input ref={fileInputRef} type="file" accept=".csv" style={{ display: "none" }}
+                       onChange={() => setIoOpen(false)}/>
+                <button style={{ display: "flex", alignItems: "center", gap: 10, width: "100%",
+                                 padding: "11px 16px", background: "none", border: "none",
+                                 cursor: "pointer", fontSize: 13, color: "var(--ink-800)",
+                                 borderBottom: "1px solid var(--line)" }}
+                        onClick={() => { fileInputRef.current?.click(); }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/>
+                  </svg>
+                  Importer depuis CSV
+                </button>
+                <button style={{ display: "flex", alignItems: "center", gap: 10, width: "100%",
+                                 padding: "11px 16px", background: "none", border: "none",
+                                 cursor: "pointer", fontSize: 13,
+                                 color: exported ? "var(--sage-500)" : "var(--ink-800)" }}
+                        onClick={() => { exportCatsCSV(allCats); setExported(true); setTimeout(() => setIoOpen(false), 800); }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>
+                  </svg>
+                  {exported ? "✓ Exporté !" : "Exporter en CSV"}
+                </button>
+              </div>
+            )}
+          </div>
+          <button className="cm-btn amber" onClick={() => setNewOpen(true)}>
+            <IcPlus size={14}/>Nouvelle catégorie
+          </button>
         </div>
       </div>
 
@@ -101,19 +221,54 @@ function CatManage({ onSeeDetail, onSeeEmpty }) {
               <div className="cm-card-t">{allCats.length} catégories</div>
               <div className="cm-card-s">glisser pour réordonner · cliquer pour éditer</div>
             </div>
-            <button className="cm-btn" style={{ padding: "4px 8px", fontSize: 11 }}>
-              <IcFilter size={11}/>Trier
-            </button>
+            <div ref={sortRef} style={{ position: "relative" }}>
+              <button className="cm-btn" style={{ padding: "4px 8px", fontSize: 11 }}
+                      onClick={() => setSortOpen(o => !o)}>
+                <IcFilter size={11}/>Trier
+              </button>
+              {sortOpen && (
+                <div style={{
+                  position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
+                  background: "var(--cream-50)", border: "1px solid var(--line)",
+                  borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+                  minWidth: 170, overflow: "hidden",
+                }}>
+                  {[
+                    { key: "default", label: "Ordre par défaut" },
+                    { key: "alpha",   label: "Alphabétique" },
+                    { key: "amount",  label: "Par montant ↓" },
+                  ].map(opt => (
+                    <button key={opt.key} style={{
+                      display: "flex", alignItems: "center", gap: 8, width: "100%",
+                      padding: "9px 14px",
+                      background: sortMode === opt.key ? "var(--amber-100)" : "none",
+                      color: sortMode === opt.key ? "var(--amber-500)" : "var(--ink-800)",
+                      border: "none", borderBottom: "1px solid var(--line)",
+                      cursor: "pointer", fontSize: 12, textAlign: "left",
+                    }} onClick={() => { setSortMode(opt.key); setSortOpen(false); }}>
+                      {opt.label}
+                      {sortMode === opt.key && <span style={{ marginLeft: "auto" }}>✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div className="cm-search">
             <IcSearch size={13}/>
-            <input placeholder="Rechercher une catégorie…" readOnly value=""/>
+            <input placeholder="Rechercher une catégorie…"
+                   value={catSearch} onChange={e => setCatSearch(e.target.value)}
+                   autoComplete="off"/>
+            {catSearch && (
+              <span style={{ cursor: "pointer", color: "var(--ink-500)", fontSize: 14, lineHeight: 1 }}
+                    onClick={() => setCatSearch("")}>×</span>
+            )}
           </div>
           <div className="cm-list">
             {allCats.map(c => (
               <div key={c.id}
-                   className={"cm-list-row" + (c.id === "alim" ? " active" : "")}
-                   onClick={() => c.id === "alim" ? onSeeDetail() : (c.id === "edu" ? onSeeEmpty() : null)}>
+                   className={"cm-list-row" + (c.id === selected.id ? " active" : "")}
+                   onClick={() => onSelectCat(c.id)}>
                 <span className="cm-drag">
                   <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor">
                     <circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/>
@@ -121,7 +276,11 @@ function CatManage({ onSeeDetail, onSeeEmpty }) {
                     <circle cx="3" cy="11" r="1.2"/><circle cx="9" cy="11" r="1.2"/>
                   </svg>
                 </span>
-                <div className="cm-list-mark" style={{ background: c.color }}>{c.label[0].toLowerCase()}</div>
+                <div className="cm-list-mark" style={{ background: c.color }}>
+                  {(catEdits[c.id]?.iconIdx ?? 0) > 0
+                    ? CAT_ICON_LIST[catEdits[c.id].iconIdx].el(13)
+                    : c.label[0].toLowerCase()}
+                </div>
                 <div>
                   <div className="cm-list-name">{c.label}</div>
                   <div className="cm-list-meta">{c.amount > 0 ? "ce mois · " + fmtEUR(c.amount, 0) : "inactive"}</div>
@@ -140,17 +299,24 @@ function CatManage({ onSeeDetail, onSeeEmpty }) {
               <div style={{ width: 36, height: 36, borderRadius: 9, background: selected.color,
                             color: "var(--cream-50)",
                             display: "flex", alignItems: "center", justifyContent: "center",
-                            fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 18 }}>a</div>
+                            fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 18 }}>
+                {(catEdits[selected.id]?.iconIdx ?? 0) > 0
+                  ? CAT_ICON_LIST[catEdits[selected.id].iconIdx].el(18)
+                  : selected.label[0].toLowerCase()}
+              </div>
               <div>
                 <div className="cm-card-t" style={{ fontSize: 15 }}>{selected.label}</div>
-                <div className="cm-card-s">12 mois · 142 transactions · {fmtEUR(5612, 0)} cumulé</div>
+                <div className="cm-card-s">
+                  {selected.amount > 0 ? `12 mois · ${fmtEUR(selected.amount * 12, 0)} cumulé` : "catégorie inactive"}
+                </div>
               </div>
             </div>
             <div style={{ display: "flex", gap: 6 }}>
-              <button className="cm-btn" onClick={onSeeDetail}>
+              <button className="cm-btn" onClick={() => selected.amount > 0 ? onSeeDetail() : onSeeEmpty()}>
                 Voir le détail <IcArrowR size={12}/>
               </button>
-              <button className="cm-btn" style={{ color: "var(--rose-500)", borderColor: "rgba(168,90,72,0.3)" }}>
+              <button className="cm-btn" style={{ color: "var(--rose-500)", borderColor: "rgba(168,90,72,0.3)" }}
+                      onClick={() => deleteCat(selected.id)}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
                      strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
@@ -160,25 +326,27 @@ function CatManage({ onSeeDetail, onSeeEmpty }) {
               </button>
             </div>
           </div>
-          <div className="cm-editor">
+
+          <div className="cm-editor" key={selected.id}>
             {/* Identity */}
             <div>
               <div className="cm-section-h">Identité</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div className="cm-row">
                   <label style={{ fontSize: 12, color: "var(--ink-600)" }}>Nom</label>
-                  <input className="cm-input" defaultValue="Alimentation"/>
+                  <input className="cm-input" defaultValue={selected.label}/>
                 </div>
                 <div className="cm-row">
                   <label style={{ fontSize: 12, color: "var(--ink-600)" }}>Description</label>
-                  <input className="cm-input" defaultValue="Courses, marchés, boulangerie, restaurants, livraisons"/>
+                  <input className="cm-input" defaultValue={selected.desc || ""}/>
                 </div>
                 <div className="cm-row">
                   <label style={{ fontSize: 12, color: "var(--ink-600)" }}>Couleur</label>
                   <div className="cm-color-picker">
                     {colorOptions.map(c => (
-                      <span key={c} className={"cm-color" + (c === "#b8693d" ? " selected" : "")}
-                            style={{ background: c }}/>
+                      <span key={c} className={"cm-color" + (c === selected.color ? " selected" : "")}
+                            style={{ background: c }}
+                            onClick={() => updateCatProp(selected.id, 'color', c)}/>
                     ))}
                     <span className="cm-color-custom"><IcPlus size={14}/></span>
                   </div>
@@ -186,17 +354,15 @@ function CatManage({ onSeeDetail, onSeeEmpty }) {
                 <div className="cm-row">
                   <label style={{ fontSize: 12, color: "var(--ink-600)" }}>Icône</label>
                   <div className="cm-icon-grid">
-                    {[
-                      { i: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M3 8l2-5h14l2 5"/><path d="M3 8v12a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8"/><circle cx="12" cy="14" r="3"/></svg>, sel: true },
-                      { i: <IcTag size={16}/> },
-                      { i: <IcWallet size={16}/> },
-                      { i: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6 8h12v12H6z"/><path d="M9 3v5M15 3v5"/></svg> },
-                      { i: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="12" cy="9" r="6"/><path d="M9 21l3-5 3 5"/></svg> },
-                      { i: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M5 12a7 7 0 0 1 14 0v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/></svg> },
-                      { i: <IcChart size={16}/> },
-                    ].map((it, i) => (
-                      <div key={i} className={"cm-icon" + (it.sel ? " selected" : "")}>{it.i}</div>
-                    ))}
+                    {CAT_ICON_LIST.map((it, i) => {
+                      const iconIdx = catEdits[selected.id]?.iconIdx ?? 0;
+                      return (
+                        <div key={i} className={"cm-icon" + (iconIdx === i ? " selected" : "")}
+                             onClick={() => updateCatProp(selected.id, 'iconIdx', i)}>
+                          {it.el(16)}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -205,19 +371,31 @@ function CatManage({ onSeeDetail, onSeeEmpty }) {
             {/* Budget */}
             <div>
               <div className="cm-section-h">Budget mensuel</div>
-              <div className="cm-budget">
-                <div className="cm-budget-input">
-                  <span className="cur">€</span>
-                  <span className="num">500</span>
-                </div>
-                <div className="cm-budget-bar">
-                  <div className="fill" style={{ width: "97.4%" }}/>
-                  <div className="thumb" style={{ left: "calc(97.4% - 8px)" }}/>
-                </div>
-                <span style={{ fontSize: 11, color: "var(--ink-500)", fontFamily: "var(--font-mono)" }}>
-                  487 € dépensés · 97 %
-                </span>
-              </div>
+              {(() => {
+                const budget = catEdits[selected.id]?.budget ?? 500;
+                const pct = budget > 0 ? Math.min((selected.amount / budget) * 100, 100) : 0;
+                return (
+                  <div className="cm-budget">
+                    <div className="cm-budget-input">
+                      <span className="cur">€</span>
+                      <input type="number" min={0} step={10}
+                             className="num"
+                             value={budget}
+                             onChange={e => updateCatProp(selected.id, 'budget', Number(e.target.value))}
+                             style={{ border: "none", outline: "none", background: "transparent",
+                                      fontFamily: "var(--font-display)", fontSize: 28,
+                                      color: "var(--ink-900)", width: 80, lineHeight: 1 }}/>
+                    </div>
+                    <div className="cm-budget-bar">
+                      <div className="fill" style={{ width: `${pct.toFixed(1)}%` }}/>
+                      <div className="thumb" style={{ left: `calc(${pct.toFixed(1)}% - 8px)` }}/>
+                    </div>
+                    <span style={{ fontSize: 11, color: "var(--ink-500)", fontFamily: "var(--font-mono)" }}>
+                      {selected.amount > 0 ? `${fmtEUR(selected.amount, 0)} dépensés · ${Math.round(pct)} %` : "aucune dépense ce mois"}
+                    </span>
+                  </div>
+                );
+              })()}
               <div style={{ fontSize: 11, color: "var(--ink-500)", marginTop: 6 }}>
                 Une alerte sera envoyée à 85 % et 100 % · <span style={{ color: "var(--amber-500)", cursor: "pointer" }}>modifier les seuils →</span>
               </div>
@@ -225,7 +403,9 @@ function CatManage({ onSeeDetail, onSeeEmpty }) {
 
             {/* Rules */}
             <div>
-              <div className="cm-section-h">Règles de classement automatique · 5 actives</div>
+              <div className="cm-section-h">
+                Règles de classement automatique · {catRules.filter(r => r.active).length} actives
+              </div>
             </div>
           </div>
 
@@ -233,57 +413,221 @@ function CatManage({ onSeeDetail, onSeeEmpty }) {
             <div style={{ flex: 1, fontSize: 12, color: "var(--ink-500)" }}>
               Une transaction sera classée en <strong style={{ color: selected.color }}>{selected.label}</strong> si elle correspond à une des règles ci-dessous.
             </div>
-            <button className="cm-btn amber" style={{ padding: "6px 12px", fontSize: 11 }}>
+            <button className="cm-btn amber" style={{ padding: "6px 12px", fontSize: 11 }}
+                    onClick={() => setRuleFormOpen(true)}>
               <IcPlus size={12}/>Nouvelle règle
             </button>
           </div>
 
           <div style={{ overflow: "auto" }}>
-            {rules.map(r => (
+            {catRules.length === 0 ? (
+              <div style={{ padding: "24px 18px", textAlign: "center", color: "var(--ink-500)", fontSize: 12 }}>
+                Aucune règle configurée pour {selected.label}.
+              </div>
+            ) : catRules.map(r => (
               <div key={r.id} className="cm-rule">
-                <span className={"cm-rule-toggle" + (r.to !== "alim" ? " off" : "")}/>
-                <div className="cm-rule-body">
-                  <div className="cm-rule-cond">
-                    Si {r.when} <strong>« {r.op} »</strong>
+                <span className={"cm-rule-toggle" + (r.active ? "" : " off")}
+                      onClick={() => toggleRule(r.id)}
+                      style={{ cursor: "pointer", flexShrink: 0 }}/>
+                {editRuleId === r.id ? (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", flex: 1 }}>
+                    <select className="cm-input" style={{ fontSize: 11, padding: "4px 8px" }}
+                            value={editDraft.when}
+                            onChange={e => setEditDraft(d => ({ ...d, when: e.target.value }))}>
+                      <option>libellé contient</option>
+                      <option>marchand =</option>
+                      <option>montant &gt;</option>
+                      <option>montant &lt;</option>
+                    </select>
+                    <input className="cm-input" style={{ fontSize: 11, padding: "4px 8px", flex: 1 }}
+                           value={editDraft.op}
+                           onChange={e => setEditDraft(d => ({ ...d, op: e.target.value }))}
+                           onKeyDown={e => e.key === "Enter" && saveEditRule()}
+                           autoFocus/>
+                    <button className="cm-btn amber" style={{ padding: "3px 8px", fontSize: 11 }}
+                            onClick={saveEditRule}>✓</button>
+                    <button className="cm-btn" style={{ padding: "3px 8px", fontSize: 11 }}
+                            onClick={() => setEditRuleId(null)}>✕</button>
                   </div>
-                  <div className="cm-rule-meta">
-                    → classer en <strong style={{ color: selected.color }}>{r.to === "alim" ? "Alimentation" : "Loisirs"}</strong>
-                    {" · dernière correspondance : " + r.last}
+                ) : (
+                  <div className="cm-rule-body">
+                    <div className="cm-rule-cond" style={{ opacity: r.active ? 1 : 0.5 }}>
+                      Si {r.when} <strong>« {r.op} »</strong>
+                    </div>
+                    <div className="cm-rule-meta">
+                      → classer en <strong style={{ color: selected.color }}>{selected.label}</strong>
+                      {" · dernière correspondance : " + r.last}
+                    </div>
                   </div>
-                </div>
-                <span className="cm-rule-count">{r.auto}</span>
-                <button className="cm-btn" style={{ padding: 0, width: 24, height: 24, justifyContent: "center" }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
-                       strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M11 4H4v16h16v-7"/><path d="M18 2l4 4-12 12H6v-4z"/>
-                  </svg>
-                </button>
-                <button className="cm-btn" style={{ padding: 0, width: 24, height: 24, justifyContent: "center", color: "var(--rose-500)" }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
-                       strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                  </svg>
-                </button>
+                )}
+                {editRuleId !== r.id && <span className="cm-rule-count">{r.auto}</span>}
+                {editRuleId !== r.id && (
+                  <button className="cm-btn" style={{ padding: 0, width: 24, height: 24, justifyContent: "center" }}
+                          onClick={() => startEditRule(r)}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
+                         strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4v16h16v-7"/><path d="M18 2l4 4-12 12H6v-4z"/>
+                    </svg>
+                  </button>
+                )}
+                {editRuleId !== r.id && (
+                  <button className="cm-btn" style={{ padding: 0, width: 24, height: 24, justifyContent: "center", color: "var(--rose-500)" }}
+                          onClick={() => deleteRule(r.id)}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
+                         strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                    </svg>
+                  </button>
+                )}
               </div>
             ))}
           </div>
         </div>
       </div>
+
+      {/* Modal — nouvelle catégorie */}
+      {newOpen && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 200,
+          background: "rgba(61,40,23,0.35)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }} onClick={() => setNewOpen(false)}>
+          <div style={{
+            background: "var(--cream-50)", borderRadius: 16,
+            padding: "28px 32px", width: 400,
+            boxShadow: "0 24px 60px rgba(61,40,23,0.18)",
+            display: "flex", flexDirection: "column", gap: 20,
+          }} onClick={e => e.stopPropagation()}>
+            <div>
+              <div style={{ fontSize: 17, fontFamily: "var(--font-display)", color: "var(--ink-900)" }}>
+                Nouvelle catégorie
+              </div>
+              <div style={{ fontSize: 12, color: "var(--ink-500)", marginTop: 4 }}>
+                Vous pourrez ajouter des règles et un budget ensuite.
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--ink-600)", textTransform: "uppercase",
+                                letterSpacing: "0.08em", display: "block", marginBottom: 6 }}>Nom</label>
+                <input
+                  className="cm-input"
+                  style={{ width: "100%", boxSizing: "border-box" }}
+                  placeholder="ex. Santé, Sport, Voyages…"
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && createCat()}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--ink-600)", textTransform: "uppercase",
+                                letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>Couleur</label>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {["#b8693d","#cd8459","#a85a48","#3d2817","#6b7a4f","#7a5c3a","#9d8b73","#d4a76a"].map(c => (
+                    <span key={c}
+                          onClick={() => setNewColor(c)}
+                          style={{
+                            width: 30, height: 30, borderRadius: 8, background: c, cursor: "pointer",
+                            border: c === newColor ? "2.5px solid var(--ink-900)" : "2px solid transparent",
+                          }}/>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="cm-btn" onClick={() => setNewOpen(false)}>Annuler</button>
+              <button
+                className="cm-btn amber"
+                onClick={createCat}
+                style={{ opacity: newName.trim() ? 1 : 0.5 }}>
+                <IcPlus size={13}/>Créer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal — nouvelle règle */}
+      {ruleFormOpen && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 200,
+          background: "rgba(61,40,23,0.35)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }} onClick={() => setRuleFormOpen(false)}>
+          <div style={{
+            background: "var(--cream-50)", borderRadius: 16,
+            padding: "28px 32px", width: 440,
+            boxShadow: "0 24px 60px rgba(61,40,23,0.18)",
+            display: "flex", flexDirection: "column", gap: 20,
+          }} onClick={e => e.stopPropagation()}>
+            <div>
+              <div style={{ fontSize: 17, fontFamily: "var(--font-display)", color: "var(--ink-900)" }}>
+                Nouvelle règle
+              </div>
+              <div style={{ fontSize: 12, color: "var(--ink-500)", marginTop: 4 }}>
+                Classer automatiquement dans <strong style={{ color: selected?.color }}>{selected?.label}</strong>.
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--ink-600)", textTransform: "uppercase",
+                                letterSpacing: "0.08em", display: "block", marginBottom: 6 }}>Condition</label>
+                <select className="cm-input" style={{ width: "100%", boxSizing: "border-box" }}
+                        value={newWhen} onChange={e => setNewWhen(e.target.value)}>
+                  <option>libellé contient</option>
+                  <option>marchand =</option>
+                  <option>montant &gt;</option>
+                  <option>montant &lt;</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--ink-600)", textTransform: "uppercase",
+                                letterSpacing: "0.08em", display: "block", marginBottom: 6 }}>Valeur</label>
+                <input className="cm-input" style={{ width: "100%", boxSizing: "border-box" }}
+                       placeholder='ex. "carrefour", "Auchan Drive", "50"…'
+                       value={newOp} onChange={e => setNewOp(e.target.value)}
+                       onKeyDown={e => e.key === "Enter" && createRule()}
+                       autoFocus/>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="cm-btn" onClick={() => setRuleFormOpen(false)}>Annuler</button>
+              <button className="cm-btn amber" onClick={createRule}
+                      style={{ opacity: newOp.trim() ? 1 : 0.5 }}>
+                <IcPlus size={13}/>Créer la règle
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
 
 /* ─────────────────────────────────────────────────────────────────
-   Vue 2 — Détail d'une catégorie (drill-down sur Alimentation)
+   Vue 2 — Détail d'une catégorie (drill-down)
    ───────────────────────────────────────────────────────────────── */
-function CatDetail({ onBack }) {
-  const cat = {
-    id: "alim", label: "Alimentation", color: "#b8693d",
-    desc: "Courses, marchés, boulangerie, restaurants, livraisons",
-  };
+function CatDetail({ cat, onBack }) {
+  const navigate = useNavigate();
+  const [period, setPeriod]           = useState("12 m");
+  const [catMonth, setCatMonth]       = useState("Mai 2026");
+  const [catMonthOpen, setCatMonthOpen] = useState(false);
+  const catMonthRef                   = useRef(null);
+  const MONTHS_OPT = ["Mai 2026","Avril 2026","Mars 2026","Février 2026","Janvier 2026","Décembre 2025","Novembre 2025","Octobre 2025"];
+  useEffect(() => {
+    if (!catMonthOpen) return;
+    const fn = e => { if (!catMonthRef.current?.contains(e.target)) setCatMonthOpen(false); };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, [catMonthOpen]);
 
-  const months = ["Juin","Juil.","Août","Sept.","Oct.","Nov.","Déc.","Janv.","Févr.","Mars","Avril","Mai"];
-  const series = [412, 488, 502, 470, 425, 460, 612, 478, 442, 466, 462, 487];
+  const allMonths = ["Juin","Juil.","Août","Sept.","Oct.","Nov.","Déc.","Janv.","Févr.","Mars","Avril","Mai"];
+  const allSeries = [412, 488, 502, 470, 425, 460, 612, 478, 442, 466, 462, 487];
+  const months = period === "6 m" ? allMonths.slice(6) : period === "YTD" ? allMonths.slice(7) : allMonths;
+  const series = period === "6 m" ? allSeries.slice(6) : period === "YTD" ? allSeries.slice(7) : allSeries;
 
   const subCats = [
     { label: "Supermarchés",  amt: 312.40, share: 0.64, color: "#b8693d" },
@@ -301,7 +645,8 @@ function CatDetail({ onBack }) {
     { name: "Le Petit Café",      n: 3, sum:  14.20 },
   ];
 
-  const txInCat = TRANSACTIONS.filter(t => t.cat === "alim");
+  const txInCat = TRANSACTIONS.filter(t => t.cat === cat.id);
+  const txDisplay = (txInCat.length > 0 ? txInCat : TRANSACTIONS).slice(0, 8);
 
   return (
     <main className="cd-main">
@@ -315,14 +660,36 @@ function CatDetail({ onBack }) {
 
       <div className="cd-header">
         <div className="cd-h-left">
-          <div className="cd-mark" style={{ background: cat.color }}>a</div>
+          <div className="cd-mark" style={{ background: cat.color }}>{cat.label[0].toLowerCase()}</div>
           <div>
             <h1 className="cd-h1">{cat.label}</h1>
-            <div className="cd-h-desc">{cat.desc}</div>
+            <div className="cd-h-desc">{cat.desc || cat.label}</div>
           </div>
         </div>
         <div className="cd-tool">
-          <button className="cd-btn"><IcCalendar size={14}/>Mai 2026 <IcChevDn size={12}/></button>
+          <div ref={catMonthRef} style={{ position: "relative" }}>
+            <button className="cd-btn" onClick={() => setCatMonthOpen(o => !o)}>
+              <IcCalendar size={14}/>{catMonth} <IcChevDn size={12}/>
+            </button>
+            {catMonthOpen && (
+              <div style={{
+                position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
+                background: "var(--cream-50)", border: "1px solid var(--line)",
+                borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+                minWidth: 180, overflow: "hidden",
+              }}>
+                {MONTHS_OPT.map(m => (
+                  <button key={m} style={{
+                    display: "block", width: "100%", padding: "9px 16px",
+                    background: m === catMonth ? "var(--amber-100)" : "none",
+                    color: m === catMonth ? "var(--amber-500)" : "var(--ink-800)",
+                    border: "none", borderBottom: "1px solid var(--line)",
+                    cursor: "pointer", fontSize: 13, textAlign: "left",
+                  }} onClick={() => { setCatMonth(m); setCatMonthOpen(false); }}>{m}</button>
+                ))}
+              </div>
+            )}
+          </div>
           <button className="cd-btn" onClick={onBack}><IcSettings size={14}/>Modifier la catégorie</button>
         </div>
       </div>
@@ -330,7 +697,7 @@ function CatDetail({ onBack }) {
       <div className="cd-kpis">
         <div className="cd-card">
           <div className="cd-card-l">Total ce mois</div>
-          <div className="cd-card-v">{fmtEUR(487, 0)}</div>
+          <div className="cd-card-v">{fmtEUR(cat.amount || 487, 0)}</div>
           <div className="cd-card-s cd-delta-up">↑ 5,4 % vs avril</div>
         </div>
         <div className="cd-card">
@@ -358,11 +725,14 @@ function CatDetail({ onBack }) {
             <div className="cd-card-ss">moyenne en pointillé · décembre = pic de saison</div>
           </div>
           <div style={{ display: "flex", gap: 4 }}>
-            <button className="cd-btn" style={{ padding: "3px 9px", fontSize: 11,
-                     background: "var(--amber-100)", color: "var(--amber-500)",
-                     borderColor: "rgba(184,105,61,0.3)" }}>12 m</button>
-            <button className="cd-btn" style={{ padding: "3px 9px", fontSize: 11 }}>6 m</button>
-            <button className="cd-btn" style={{ padding: "3px 9px", fontSize: 11 }}>YTD</button>
+            {["12 m", "6 m", "YTD"].map(p => (
+              <button key={p} className="cd-btn"
+                      style={{ padding: "3px 9px", fontSize: 11,
+                               ...(period === p ? { background: "var(--amber-100)", color: "var(--amber-500)", borderColor: "rgba(184,105,61,0.3)" } : {}) }}
+                      onClick={() => setPeriod(p)}>
+                {p}
+              </button>
+            ))}
           </div>
         </div>
         <CategoryEvolutionChart months={months} values={series} color={cat.color}/>
@@ -374,7 +744,7 @@ function CatDetail({ onBack }) {
           <div className="cd-card-h">
             <div>
               <div className="cd-card-t">Sous-catégories</div>
-              <div className="cd-card-ss">détail interne d'Alimentation</div>
+              <div className="cd-card-ss">détail interne de {cat.label}</div>
             </div>
           </div>
           <div style={{ flex: 1, overflow: "hidden" }}>
@@ -424,15 +794,16 @@ function CatDetail({ onBack }) {
         <div className="cd-card cd-bot-card">
           <div className="cd-card-h">
             <div>
-              <div className="cd-card-t">Transactions · Alimentation</div>
-              <div className="cd-card-ss">14 mouvements ce mois</div>
+              <div className="cd-card-t">Transactions · {cat.label}</div>
+              <div className="cd-card-ss">{txDisplay.length} mouvements ce mois</div>
             </div>
-            <button className="cd-btn" style={{ padding: "4px 10px", fontSize: 11 }}>
+            <button className="cd-btn" style={{ padding: "4px 10px", fontSize: 11 }}
+                    onClick={() => navigate("/transactions")}>
               Voir tout <IcArrowR size={11}/>
             </button>
           </div>
           <div style={{ flex: 1, overflow: "hidden" }}>
-            {txInCat.concat(txInCat).slice(0, 8).map((t, i) => (
+            {txDisplay.map((t, i) => (
               <div key={i} className="cd-tx-row">
                 <span className="cd-tx-date">{t.d}</span>
                 <div>
@@ -507,11 +878,17 @@ function CategoryEvolutionChart({ months, values, color }) {
 /* ─────────────────────────────────────────────────────────────────
    Vue 3 — Catégorie vide (créée mais sans transactions)
    ───────────────────────────────────────────────────────────────── */
-function CatEmpty({ onBack }) {
-  const cat = {
-    id: "edu", label: "Éducation", color: "#7a5c3a",
-    desc: "Frais de scolarité, livres, cours en ligne, abonnements éducatifs",
-  };
+function CatEmpty({ cat, onBack }) {
+  const [emptyMonth, setEmptyMonth]       = useState("Mai 2026");
+  const [emptyMonthOpen, setEmptyMonthOpen] = useState(false);
+  const emptyMonthRef                     = useRef(null);
+  const MONTHS_OPT = ["Mai 2026","Avril 2026","Mars 2026","Février 2026","Janvier 2026","Décembre 2025","Novembre 2025","Octobre 2025"];
+  useEffect(() => {
+    if (!emptyMonthOpen) return;
+    const fn = e => { if (!emptyMonthRef.current?.contains(e.target)) setEmptyMonthOpen(false); };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, [emptyMonthOpen]);
 
   const suggestions = [
     { d: "11/05", lbl: "Udemy.com — Subscription", sub: "PAIEMENT PAR CARTE",  cur: "abo", amt: -16.99 },
@@ -542,15 +919,37 @@ function CatEmpty({ onBack }) {
 
       <div className="ce-header">
         <div className="ce-h-left">
-          <div className="ce-mark" style={{ background: cat.color }}>é</div>
+          <div className="ce-mark" style={{ background: cat.color }}>{cat.label[0].toLowerCase()}</div>
           <div>
             <h1 className="ce-h1">{cat.label}</h1>
-            <div className="ce-h-desc">{cat.desc}</div>
+            <div className="ce-h-desc">{cat.desc || cat.label}</div>
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="ce-btn"><IcCalendar size={14}/>Mai 2026 <IcChevDn size={12}/></button>
-          <button className="ce-btn"><IcSettings size={14}/>Modifier la catégorie</button>
+          <div ref={emptyMonthRef} style={{ position: "relative" }}>
+            <button className="ce-btn" onClick={() => setEmptyMonthOpen(o => !o)}>
+              <IcCalendar size={14}/>{emptyMonth} <IcChevDn size={12}/>
+            </button>
+            {emptyMonthOpen && (
+              <div style={{
+                position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
+                background: "var(--cream-50)", border: "1px solid var(--line)",
+                borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+                minWidth: 180, overflow: "hidden",
+              }}>
+                {MONTHS_OPT.map(m => (
+                  <button key={m} style={{
+                    display: "block", width: "100%", padding: "9px 16px",
+                    background: m === emptyMonth ? "var(--amber-100)" : "none",
+                    color: m === emptyMonth ? "var(--amber-500)" : "var(--ink-800)",
+                    border: "none", borderBottom: "1px solid var(--line)",
+                    cursor: "pointer", fontSize: 13, textAlign: "left",
+                  }} onClick={() => { setEmptyMonth(m); setEmptyMonthOpen(false); }}>{m}</button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button className="ce-btn" onClick={onBack}><IcSettings size={14}/>Modifier la catégorie</button>
         </div>
       </div>
 
@@ -590,7 +989,7 @@ function CatEmpty({ onBack }) {
             </svg>
           </div>
           <div className="ce-empty-t">
-            Rien à montrer dans <em>Éducation</em>.
+            Rien à montrer dans <em>{cat.label}</em>.
           </div>
           <div className="ce-empty-s">
             Cette catégorie existe mais aucune transaction n'y a encore été classée — ni ce mois,
@@ -616,7 +1015,7 @@ function CatEmpty({ onBack }) {
           <div className="ce-card-h">
             <div>
               <div className="ce-card-t">Suggestions à partir de vos transactions</div>
-              <div className="ce-card-s">3 mouvements récents qui pourraient appartenir à Éducation</div>
+              <div className="ce-card-s">3 mouvements récents qui pourraient appartenir à {cat.label}</div>
             </div>
             <button className="ce-btn" style={{ padding: "4px 10px", fontSize: 11 }}>Ignorer</button>
           </div>
@@ -637,7 +1036,7 @@ function CatEmpty({ onBack }) {
                   <button className="primary"
                           style={{ padding: "4px 8px", fontSize: 10.5,
                                   borderRadius: 8, border: "none", cursor: "pointer" }}>
-                    → Éducation
+                    → {cat.label}
                   </button>
                 </div>
               </div>
@@ -654,9 +1053,8 @@ function CatEmpty({ onBack }) {
             <div>
               <div className="ce-rule-tip-t">Astuce — créer une règle</div>
               <div className="ce-rule-tip-s">
-                Si vous voulez que toutes les transactions contenant <strong className="mono">« Udemy », « Coursera »</strong> ou
-                <strong className="mono"> « Khan Academy »</strong> soient classées en Éducation automatiquement,
-                créez une règle depuis Catégories → Règles.
+                Créez une règle depuis Catégories → Règles pour classer automatiquement
+                les prochaines transactions dans <strong>{cat.label}</strong>.
               </div>
             </div>
           </div>

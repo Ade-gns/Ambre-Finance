@@ -5,9 +5,21 @@
 
    Particularité : pas de sidebar, l'app n'est pas encore initialisée. */
 
+import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { IcLock, IcTag, IcChart, IcUpload } from "../lib/icons";
 
 export default function Onboarding() {
+  const navigate = useNavigate();
+  const fileRef = useRef(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  function handleFiles(files) {
+    if (!files || files.length === 0) return;
+    // TODO: wire into import flow
+    navigate("/import");
+  }
+
   return (
     <div className="ob-root">
       <style>{OB_STYLES}</style>
@@ -87,7 +99,12 @@ export default function Onboarding() {
           </p>
         </div>
 
-        <div className="ob-drop">
+        <div
+          className={"ob-drop" + (dragOver ? " drag-over" : "")}
+          onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={e => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
+        >
           <div className="ob-drop-ico">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -100,7 +117,12 @@ export default function Onboarding() {
           <div className="ob-drop-s">
             PDF, CSV, OFX ou QIF — la plupart des banques françaises sont reconnues.
           </div>
-          <button className="ob-drop-btn"><IcUpload size={14}/>Parcourir mes fichiers</button>
+          <input ref={fileRef} type="file" accept=".pdf,.csv,.ofx,.qif"
+                 style={{ display: "none" }}
+                 onChange={e => handleFiles(e.target.files)}/>
+          <button className="ob-drop-btn" onClick={() => fileRef.current?.click()}>
+            <IcUpload size={14}/>Parcourir mes fichiers
+          </button>
           <div className="ob-drop-fmt">
             <span>.pdf</span><span>.csv</span><span>.ofx</span><span>.qif</span>
           </div>
@@ -118,7 +140,7 @@ export default function Onboarding() {
         </div>
 
         <div className="ob-foot">
-          <a>← Configurer plus tard</a>
+          <a style={{ cursor: "pointer" }} onClick={() => navigate("/")}>← Configurer plus tard</a>
           <span>↩ Entrée pour continuer</span>
         </div>
       </div>
@@ -200,6 +222,7 @@ const OB_STYLES = `
              border-radius: 16px; padding: 36px 28px;
              display: flex; flex-direction: column;
              align-items: center; gap: 12px; }
+  .ob-drop.drag-over { border-color: var(--amber-500); background: rgba(184,105,61,0.05); }
   .ob-drop-ico { width: 56px; height: 56px; border-radius: 14px;
                  background: var(--amber-100); color: var(--amber-500);
                  display: flex; align-items: center; justify-content: center; }

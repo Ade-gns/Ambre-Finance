@@ -4,7 +4,8 @@
    3. empty   — aucun résultat / aucune donnée
    4. bulk    — sélection multiple (bulk actions bar) */
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { CATEGORIES } from "../data/mockData";
 import { fmtEUR } from "../lib/chartPrimitives";
 import {
@@ -44,6 +45,21 @@ const TX_FILTERS = [
   { id: "tra",  label: "Transports",   color: "#6b7a4f" },
 ];
 
+function exportTxCSV(txs, filename = "transactions.csv") {
+  const header = "Date,Libellé,Sous-titre,Compte,Catégorie,Mode,Montant";
+  const rows = txs.map(t =>
+    [t.d, `"${t.lbl}"`, `"${t.sub || ""}"`, t.acc, t.cat, t.mode, t.amt].join(",")
+  );
+  const csv = header + "\n" + rows.join("\n");
+  const a   = document.createElement("a");
+  a.href    = "data:text/csv;charset=utf-8," + encodeURIComponent(csv);
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 function txCatStyle(cat) {
   if (cat === "inc") return { color: "#6b7a4f", label: "Revenus" };
   if (cat === "epa") return { color: "#9d8b73", label: "Épargne" };
@@ -55,28 +71,25 @@ function txCatStyle(cat) {
    Composant principal — décide quelle variante afficher
    ───────────────────────────────────────────────────────────────── */
 export default function Transactions() {
-  const [selectedTx, setSelectedTx]     = useState(null);
-  const [bulkMode, setBulkMode]         = useState(false);
-  const [bulkSelected, setBulkSelected] = useState([]);
+  const [selectedTx, setSelectedTx] = useState(null);
+  const [bulkMode, setBulkMode]     = useState(false);
+  const bulkStartRef                = useRef(null);   // index pré-sélectionné à l'entrée
 
   const openDetail  = tx  => { setSelectedTx(tx); setBulkMode(false); };
   const closeDetail = ()  => setSelectedTx(null);
-  const openBulk    = ()  => { setBulkMode(true); setSelectedTx(null); setBulkSelected([]); };
-  const closeBulk   = ()  => { setBulkMode(false); setBulkSelected([]); };
-
-  const toggleBulk  = idx => setBulkSelected(prev =>
-    prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
-  );
-  const selectAll   = () => setBulkSelected(TX_LIST.map((_, i) => i));
-  const deselectAll = () => setBulkSelected([]);
+  const openBulk    = (startIdx = null) => {
+    bulkStartRef.current = startIdx;
+    setBulkMode(true);
+    setSelectedTx(null);
+  };
+  const closeBulk = () => setBulkMode(false);
 
   return (
     <>
       <style>{TX_STYLES}</style>
 
       {bulkMode ? (
-        <TxBulk onClose={closeBulk} selected={bulkSelected}
-                onToggle={toggleBulk} onSelectAll={selectAll} onDeselectAll={deselectAll}/>
+        <TxBulk onClose={closeBulk} startIdx={bulkStartRef.current}/>
       ) : selectedTx ? (
         <TxDetail t={selectedTx} onClose={closeDetail}/>
       ) : (
@@ -89,7 +102,8 @@ export default function Transactions() {
 /* ─────────────────────────────────────────────────────────────────
    Atomes partagés par les 4 vues
    ───────────────────────────────────────────────────────────────── */
-function TxHeader() {
+function TxHeader({ onExport }) {
+  const navigate = useNavigate();
   return (
     <div className="tx-top">
       <div>
@@ -97,7 +111,7 @@ function TxHeader() {
         <h1 className="tx-h1">Mes <em>transactions</em>.</h1>
       </div>
       <div className="tx-h1-actions">
-        <button className="tx-btn">
+        <button className="tx-btn" onClick={onExport}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
                strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -105,7 +119,9 @@ function TxHeader() {
           </svg>
           Exporter
         </button>
-        <button className="tx-btn amber"><IcUpload size={14}/>Importer un relevé</button>
+        <button className="tx-btn amber" onClick={() => navigate("/import")}>
+          <IcUpload size={14}/>Importer un relevé
+        </button>
       </div>
     </div>
   );
@@ -113,12 +129,40 @@ function TxHeader() {
 
 function TxFilterBar({ withChips = true, filter = "all", onChangeFilter = () => {},
                        counts = { all: 18, exp: 16, inc: 1, tr: 1 },
-                       search = "", onSearch = () => {} }) {
+                       search = "", onSearch = () => {},
+                       catSel = [], onCatSelChange = () => {},
+                       month = "Mai 2026", onMonthChange = () => {},
+                       sortDir = "desc", onSortDir = () => {} }) {
   const segs = [
     { key: "all", label: "Tout",       n: counts.all },
     { key: "exp", label: "Dépenses",   n: counts.exp },
     { key: "inc", label: "Revenus",    n: counts.inc },
     { key: "tr",  label: "Transferts", n: counts.tr },
+  ];
+  const [dateOpen, setDateOpen]     = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const dateRef   = useRef(null);
+  const filterRef = useRef(null);
+  useEffect(() => {
+    if (!dateOpen) return;
+    const fn = e => { if (!dateRef.current?.contains(e.target)) setDateOpen(false); };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, [dateOpen]);
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const fn = e => { if (!filterRef.current?.contains(e.target)) setFiltersOpen(false); };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, [filtersOpen]);
+  const MONTHS_OPT = ["Mai 2026","Avril 2026","Mars 2026","Février 2026","Janvier 2026","Décembre 2025","Novembre 2025","Octobre 2025"];
+  const CAT_OPT = [
+    { id: "alim", label: "Alimentation", color: "#b8693d" },
+    { id: "loy",  label: "Logement",     color: "#3d2817" },
+    { id: "tra",  label: "Transports",   color: "#6b7a4f" },
+    { id: "loi",  label: "Loisirs",      color: "#a85a48" },
+    { id: "san",  label: "Santé",        color: "#9d8b73" },
+    { id: "abo",  label: "Abonnements",  color: "#cd8459" },
   ];
   return (
     <>
@@ -136,45 +180,106 @@ function TxFilterBar({ withChips = true, filter = "all", onChangeFilter = () => 
         <div className="tx-search">
           <IcSearch size={14}/>
           <input placeholder="Rechercher un libellé, un montant…"
-                 value={search} onChange={e => onSearch(e.target.value)}/>
+                 value={search} onChange={e => onSearch(e.target.value)}
+                 autoComplete="off" autoCorrect="off" spellCheck="false"/>
           {search && (
             <span style={{ cursor: "pointer", color: "var(--ink-500)", fontSize: 14, lineHeight: 1 }}
                   onClick={() => onSearch("")}>×</span>
           )}
           {!search && <span className="tx-search-kbd">⌘F</span>}
         </div>
-        <button className="tx-btn"><IcCalendar size={14}/>Mai 2026 <IcChevDn size={12}/></button>
-        <button className="tx-btn"><IcFilter size={14}/>Filtres <span className="tx-badge">3</span></button>
-        <button className="tx-btn">
+        <div ref={dateRef} style={{ position: "relative" }}>
+          <button className="tx-btn" onClick={() => setDateOpen(o => !o)}>
+            <IcCalendar size={14}/>{month} <IcChevDn size={12}/>
+          </button>
+          {dateOpen && (
+            <div style={{
+              position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
+              background: "var(--cream-50)", border: "1px solid var(--line)",
+              borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+              minWidth: 180, overflow: "hidden",
+            }}>
+              {MONTHS_OPT.map(m => (
+                <button key={m} style={{
+                  display: "block", width: "100%", padding: "9px 16px",
+                  background: m === month ? "var(--amber-100)" : "none",
+                  color: m === month ? "var(--amber-500)" : "var(--ink-800)",
+                  border: "none", cursor: "pointer", fontSize: 13, textAlign: "left",
+                  borderBottom: "1px solid var(--line)",
+                }} onClick={() => { onMonthChange(m); setDateOpen(false); }}>{m}</button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div ref={filterRef} style={{ position: "relative" }}>
+          <button className="tx-btn" onClick={() => setFiltersOpen(o => !o)}>
+            <IcFilter size={14}/>Filtres
+            {catSel.length > 0 && <span className="tx-badge">{catSel.length}</span>}
+          </button>
+          {filtersOpen && (
+            <div style={{
+              position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
+              background: "var(--cream-50)", border: "1px solid var(--line)",
+              borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+              width: 230, padding: "14px 16px",
+            }}>
+              <div style={{ fontSize: 10, color: "var(--ink-500)", letterSpacing: "0.08em",
+                            textTransform: "uppercase", marginBottom: 10 }}>Catégories</div>
+              {CAT_OPT.map(c => (
+                <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 10,
+                                            padding: "6px 0", cursor: "pointer", fontSize: 13 }}>
+                  <input type="checkbox" checked={catSel.includes(c.id)}
+                         onChange={() => onCatSelChange(catSel.includes(c.id) ? catSel.filter(x => x !== c.id) : [...catSel, c.id])}/>
+                  <span className="amb-dot" style={{ background: c.color }}/>
+                  {c.label}
+                </label>
+              ))}
+              <div style={{ display: "flex", gap: 6, marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 10 }}>
+                <button className="tx-btn" style={{ flex: 1, justifyContent: "center" }}
+                        onClick={() => onCatSelChange([])}>Réinitialiser</button>
+                <button className="tx-btn amber" style={{ flex: 1, justifyContent: "center",
+                        background: "var(--amber-500)", color: "var(--cream-50)", borderColor: "var(--amber-500)" }}
+                        onClick={() => setFiltersOpen(false)}>Appliquer</button>
+              </div>
+            </div>
+          )}
+        </div>
+        <button className="tx-btn" onClick={() => onSortDir(sortDir === "desc" ? "asc" : "desc")}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
                strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 6h13M3 12h9M3 18h5M14 10l3 3-3 3M17 13H21"/>
           </svg>
-          Date ↓
+          Date {sortDir === "desc" ? "↓" : "↑"}
         </button>
       </div>
 
-      {withChips && (
+      {withChips && (catSel.length > 0 || search) && (
         <div className="tx-chips">
           <span className="tx-chip-lbl">Filtres actifs</span>
-          {TX_FILTERS.map(f => (
-            <span key={f.id} className="tx-chip" style={{ borderColor: f.color + "55", color: f.color }}>
-              <span className="amb-dot" style={{ background: f.color }}/>
-              {f.label}
-              <IcPlus size={11} style={{ transform: "rotate(45deg)" }}/>
+          {catSel.map(id => {
+            const cat = CAT_OPT.find(c => c.id === id);
+            if (!cat) return null;
+            return (
+              <span key={id} className="tx-chip" style={{ borderColor: cat.color + "55", color: cat.color }}>
+                <span className="amb-dot" style={{ background: cat.color }}/>
+                {cat.label}
+                <span style={{ cursor: "pointer", display: "flex" }}
+                      onClick={() => onCatSelChange(catSel.filter(x => x !== id))}>
+                  <IcPlus size={11} style={{ transform: "rotate(45deg)" }}/>
+                </span>
+              </span>
+            );
+          })}
+          {search && (
+            <span className="tx-chip">
+              <IcSearch size={11}/>
+              « {search} »
+              <span style={{ cursor: "pointer", display: "flex" }} onClick={() => onSearch("")}>
+                <IcPlus size={11} style={{ transform: "rotate(45deg)" }}/>
+              </span>
             </span>
-          ))}
-          <span className="tx-chip">
-            <span className="amb-dot" style={{ background: "var(--ink-500)" }}/>
-            Montant ≤ −10 €
-            <IcPlus size={11} style={{ transform: "rotate(45deg)" }}/>
-          </span>
-          <span className="tx-chip">
-            <IcCalendar size={11}/>
-            1 mai → aujourd'hui
-            <IcPlus size={11} style={{ transform: "rotate(45deg)" }}/>
-          </span>
-          <button className="tx-chip clear">Tout effacer</button>
+          )}
+          <button className="tx-chip clear" onClick={() => { onCatSelChange([]); onChangeFilter("all"); onSearch(""); }}>Tout effacer</button>
         </div>
       )}
     </>
@@ -253,9 +358,14 @@ function TxTableHead() {
 /* ─────────────────────────────────────────────────────────────────
    Vue 1 — Liste par défaut
    ───────────────────────────────────────────────────────────────── */
+const MONTH_NUM = { "Janvier":1,"Février":2,"Mars":3,"Avril":4,"Mai":5,"Juin":6,"Juillet":7,"Août":8,"Septembre":9,"Octobre":10,"Novembre":11,"Décembre":12 };
+
 function TxDefault({ onRowClick, onSelectMany }) {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [catSel, setCatSel] = useState([]);
+  const [month, setMonth]   = useState("Mai 2026");
+  const [sortDir, setSortDir] = useState("desc");
 
   const allTxs = TX_LIST;
   const cExp = allTxs.filter(t => t.amt < 0 && t.cat !== "epa").length;
@@ -270,22 +380,29 @@ function TxDefault({ onRowClick, onSelectMany }) {
       : filter === "inc" ? t.amt > 0
       : t.cat === "epa";
     const matchSearch = !q || t.lbl.toLowerCase().includes(q) || t.sub.toLowerCase().includes(q);
-    return matchSeg && matchSearch;
+    const matchCat = catSel.length === 0 || catSel.includes(t.cat);
+    const mNum = MONTH_NUM[month.split(" ")[0]];
+    const matchMonth = !mNum || parseInt(t.d.split("/")[1], 10) === mNum;
+    return matchSeg && matchSearch && matchCat && matchMonth;
   };
 
-  const groups = [
+  const BASE_GROUPS = [
     { label: "Cette semaine · 12 – 14 mai",         sum: -1043.93, rows: TX_LIST.slice(0, 5) },
     { label: "Semaine du 5 mai · 5 – 11 mai",        sum: -253.34,  rows: TX_LIST.slice(5, 13) },
     { label: "Semaine du 28 avr. · 28 avr. – 4 mai", sum: -456.90,  rows: TX_LIST.slice(13) },
   ];
+  const groups = sortDir === "desc" ? BASE_GROUPS : [...BASE_GROUPS].reverse();
 
   const filteredTotal = allTxs.filter(matchFilter).length;
 
   return (
     <main className="tx-main">
-      <TxHeader />
+      <TxHeader onExport={() => exportTxCSV(TX_LIST)} />
       <TxFilterBar filter={filter} onChangeFilter={setFilter} counts={counts}
-                   search={search} onSearch={setSearch}/>
+                   search={search} onSearch={setSearch}
+                   catSel={catSel} onCatSelChange={setCatSel}
+                   month={month} onMonthChange={setMonth}
+                   sortDir={sortDir} onSortDir={setSortDir}/>
       <TxSummary />
 
       <div className="tx-table">
@@ -302,7 +419,7 @@ function TxDefault({ onRowClick, onSelectMany }) {
                 </div>
                 {filteredRows.map((t, i) => (
                   <TxRow key={gi + "-" + i} t={t} onClick={() => onRowClick(t)}
-                         onCheckboxClick={onSelectMany}/>
+                         onCheckboxClick={() => onSelectMany(TX_LIST.indexOf(t))}/>
                 ))}
               </div>
             );
@@ -590,13 +707,21 @@ function TxEmpty() {
 /* ─────────────────────────────────────────────────────────────────
    Vue 4 — Sélection multiple (bulk actions)
    ───────────────────────────────────────────────────────────────── */
-function TxBulk({ onClose, selected, onToggle, onSelectAll, onDeselectAll }) {
+function TxBulk({ onClose, startIdx }) {
+  const [selected, setSelected] = useState(() => startIdx != null ? [startIdx] : []);
+
+  const toggle     = idx => setSelected(prev =>
+    prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
+  );
+  const selectAll   = () => setSelected(TX_LIST.map((_, i) => i));
+  const deselectAll = () => setSelected([]);
+
   const selCount = selected.length;
   const selTotal = selected.reduce((s, i) => s + Math.abs(TX_LIST[i]?.amt || 0), 0);
 
   return (
     <main className="tx-main">
-      <TxHeader />
+      <TxHeader onExport={() => exportTxCSV(selected.map(i => TX_LIST[i]), "selection.csv")} />
 
       {/* Bulk action bar (remplace la toolbar) */}
       <div className="tx-bulk-bar">
@@ -612,9 +737,9 @@ function TxBulk({ onClose, selected, onToggle, onSelectAll, onDeselectAll }) {
           </span>
         </span>
         <span style={{ fontSize: 11, color: "var(--cream-300)", cursor: "pointer" }}>
-          <span onClick={onSelectAll}>Tout sélectionner ({TX_LIST.length})</span>
+          <span onClick={selectAll}>Tout sélectionner ({TX_LIST.length})</span>
           {" · "}
-          <span onClick={onDeselectAll}>Désélectionner</span>
+          <span onClick={deselectAll}>Désélectionner</span>
         </span>
         <span className="tx-bulk-sep"/>
         <button className="tx-bulk-action amber">
@@ -633,7 +758,10 @@ function TxBulk({ onClose, selected, onToggle, onSelectAll, onDeselectAll }) {
           </svg>
           Créer une règle
         </button>
-        <button className="tx-bulk-action">Exporter…</button>
+        <button className="tx-bulk-action"
+                onClick={() => exportTxCSV(selected.map(i => TX_LIST[i]), "selection.csv")}>
+          Exporter…
+        </button>
         <button className="tx-bulk-action danger">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -663,7 +791,7 @@ function TxBulk({ onClose, selected, onToggle, onSelectAll, onDeselectAll }) {
             </span>
           </div>
           {TX_LIST.slice(0, 5).map((t, i) => (
-            <TxRow key={"a-" + i} t={t} bulk={selected.includes(i)} onClick={() => onToggle(i)}/>
+            <TxRow key={"a-" + i} t={t} bulk={selected.includes(i)} onClick={() => toggle(i)}/>
           ))}
           <div className="tx-group-h">
             <span>Semaine du 5 mai · 5 – 11 mai</span>
@@ -673,7 +801,7 @@ function TxBulk({ onClose, selected, onToggle, onSelectAll, onDeselectAll }) {
             </span>
           </div>
           {TX_LIST.slice(5, 11).map((t, i) => (
-            <TxRow key={"b-" + i} t={t} bulk={selected.includes(i + 5)} onClick={() => onToggle(i + 5)}/>
+            <TxRow key={"b-" + i} t={t} bulk={selected.includes(i + 5)} onClick={() => toggle(i + 5)}/>
           ))}
         </div>
       </div>

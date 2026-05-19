@@ -5,6 +5,7 @@
    4. error   — erreur de lecture + cas fréquents */
 
 import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { CATEGORIES } from "../data/mockData";
 import { fmtEUR } from "../lib/chartPrimitives";
 import {
@@ -153,6 +154,21 @@ export default function Import() {
 function ImportEmpty({ onFile }) {
   const fileRef = useRef(null);
   const [dragging, setDragging] = useState(false);
+  const [histOpen, setHistOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQ, setSearchQ] = useState("");
+  const [histFilter, setHistFilter] = useState("all"); // "all" | "pdf" | "csv"
+  const [addSourceOpen, setAddSourceOpen] = useState(false);
+  const [newSourceName, setNewSourceName] = useState("");
+  const [newSourceFmt, setNewSourceFmt] = useState("CSV");
+  const [userSources, setUserSources] = useState([]);
+  const HIST = [
+    { id: 1, file: "releve_bnp_mai_2026.csv",  date: "14/05/2026", bank: "BNP Paribas",  n: 18, size: "42 Ko" },
+    { id: 2, file: "releve_bnp_avril_2026.csv", date: "01/05/2026", bank: "BNP Paribas",  n: 22, size: "51 Ko" },
+    { id: 3, file: "releve_bnp_mars_2026.csv",  date: "02/04/2026", bank: "BNP Paribas",  n: 19, size: "46 Ko" },
+    { id: 4, file: "releve_lbp_mars_2026.csv",  date: "28/03/2026", bank: "La Banque Postale", n: 5, size: "12 Ko" },
+    { id: 5, file: "releve_bnp_fev_2026.csv",   date: "03/03/2026", bank: "BNP Paribas",  n: 21, size: "49 Ko" },
+  ];
 
   const sources = [
     { name: "BNP Paribas",            fmt: "PDF, CSV", last: "Avril 2026", status: "ok" },
@@ -169,6 +185,15 @@ function ImportEmpty({ onFile }) {
     { file: "releve-bnp-mars-2026.pdf",  date: "06 avril · 22h04", tx: 39, period: "01 – 31 mars",    size: "291 ko" },
     { file: "lbp-fevrier-2026.csv",      date: "08 mars · 18h44",  tx: 36, period: "01 – 28 février", size: "11 ko"  },
   ];
+
+  const allSources = [...sources, ...userSources].filter(s =>
+    !searchQ || s.name.toLowerCase().includes(searchQ.toLowerCase())
+  );
+
+  const filteredHistory = history.filter(h => {
+    if (histFilter === "all") return true;
+    return h.file.toLowerCase().endsWith("." + histFilter);
+  });
 
   const onDrop = e => {
     e.preventDefault();
@@ -277,8 +302,25 @@ function ImportEmpty({ onFile }) {
           <h1 className="ie-h1">Ajouter un <em>relevé</em>.</h1>
         </div>
         <div className="ie-tool">
-          <button className="ie-btn"><IcCalendar size={14}/>Historique complet</button>
-          <button className="ie-btn"><IcSearch size={14}/></button>
+          {searchOpen && (
+            <input
+              autoFocus
+              value={searchQ}
+              onChange={e => setSearchQ(e.target.value)}
+              placeholder="Rechercher une source…"
+              style={{
+                padding: "6px 10px", borderRadius: 8, border: "1px solid var(--line)",
+                background: "var(--cream-50)", fontSize: 12, color: "var(--ink-800)",
+                outline: "none", width: 200,
+              }}
+            />
+          )}
+          <button className="ie-btn" onClick={() => setHistOpen(true)}>
+            <IcCalendar size={14}/>Historique complet
+          </button>
+          <button className="ie-btn" onClick={() => { setSearchOpen(o => !o); if (searchOpen) setSearchQ(""); }}>
+            <IcSearch size={14}/>
+          </button>
         </div>
       </div>
 
@@ -332,12 +374,13 @@ function ImportEmpty({ onFile }) {
               <div className="ie-card-t">Sources reconnues</div>
               <div className="ie-card-s">6 formats pris en charge · ajoutez les vôtres dans Paramètres</div>
             </div>
-            <button className="ie-btn" style={{ padding: "4px 10px", fontSize: 11 }}>
+            <button className="ie-btn" style={{ padding: "4px 10px", fontSize: 11 }}
+                    onClick={() => setAddSourceOpen(true)}>
               <IcPlus size={11}/>Ajouter
             </button>
           </div>
           <div className="ie-src-list">
-            {sources.map(s => (
+            {allSources.map(s => (
               <div key={s.name} className="ie-src-row">
                 <div className="ie-src-mark">{s.name[0].toLowerCase()}</div>
                 <div>
@@ -361,15 +404,15 @@ function ImportEmpty({ onFile }) {
               <div className="ie-card-s">4 fichiers · 164 transactions importées</div>
             </div>
             <div style={{ display: "flex", gap: 4 }}>
-              <button className="ie-btn" style={{ padding: "4px 10px", fontSize: 11,
-                       background: "var(--amber-100)", color: "var(--amber-500)",
-                       borderColor: "rgba(184,105,61,0.3)" }}>Tous</button>
-              <button className="ie-btn" style={{ padding: "4px 10px", fontSize: 11 }}>PDF</button>
-              <button className="ie-btn" style={{ padding: "4px 10px", fontSize: 11 }}>CSV</button>
+              {[["all","Tous"],["pdf","PDF"],["csv","CSV"]].map(([k,label]) => (
+                <button key={k} className="ie-btn" style={{ padding: "4px 10px", fontSize: 11,
+                  ...(histFilter === k ? { background: "var(--amber-100)", color: "var(--amber-500)", borderColor: "rgba(184,105,61,0.3)" } : {})
+                }} onClick={() => setHistFilter(k)}>{label}</button>
+              ))}
             </div>
           </div>
           <div style={{ overflow: "hidden" }}>
-            {history.map(h => (
+            {filteredHistory.map(h => (
               <div key={h.file} className="ie-hist-row">
                 <div className="ie-hist-ico">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -395,6 +438,115 @@ function ImportEmpty({ onFile }) {
           </div>
         </div>
       </div>
+
+      {addSourceOpen && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 200,
+          background: "rgba(61,40,23,0.35)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }} onClick={() => setAddSourceOpen(false)}>
+          <div style={{
+            background: "var(--cream-50)", borderRadius: 16,
+            padding: "28px 32px", width: 420,
+            boxShadow: "0 24px 60px rgba(61,40,23,0.18)",
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+              <div style={{ fontSize: 16, fontFamily: "var(--font-display)", color: "var(--ink-900)" }}>
+                Ajouter une source
+              </div>
+              <button onClick={() => setAddSourceOpen(false)} style={{
+                width: 28, height: 28, border: "1px solid var(--line)", borderRadius: 7,
+                background: "var(--cream-100)", cursor: "pointer", fontSize: 18, display: "flex",
+                alignItems: "center", justifyContent: "center", color: "var(--ink-600)",
+              }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--ink-500)", display: "block", marginBottom: 6 }}>Nom de la banque</label>
+                <input value={newSourceName} onChange={e => setNewSourceName(e.target.value)}
+                       placeholder="ex. Fortuneo, Hello bank…"
+                       style={{ width: "100%", padding: "8px 10px", borderRadius: 8, fontSize: 13,
+                                border: "1px solid var(--line)", background: "var(--cream-100)",
+                                color: "var(--ink-800)", boxSizing: "border-box", outline: "none" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--ink-500)", display: "block", marginBottom: 6 }}>Format</label>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {["CSV","PDF","OFX"].map(f => (
+                    <button key={f} onClick={() => setNewSourceFmt(f)} style={{
+                      padding: "6px 14px", borderRadius: 7, fontSize: 12, cursor: "pointer",
+                      border: "1px solid var(--line)",
+                      background: newSourceFmt === f ? "var(--amber-100)" : "var(--cream-50)",
+                      color: newSourceFmt === f ? "var(--amber-500)" : "var(--ink-700)",
+                      borderColor: newSourceFmt === f ? "rgba(184,105,61,0.3)" : "var(--line)",
+                    }}>{f}</button>
+                  ))}
+                </div>
+              </div>
+              <button onClick={() => {
+                if (!newSourceName.trim()) return;
+                setUserSources(prev => [...prev, { name: newSourceName.trim(), fmt: newSourceFmt, last: null, status: "new" }]);
+                setNewSourceName("");
+                setNewSourceFmt("CSV");
+                setAddSourceOpen(false);
+              }} style={{
+                marginTop: 6, padding: "9px 0", borderRadius: 9, fontSize: 13, fontWeight: 500,
+                background: "var(--amber-500)", color: "var(--cream-50)", border: "none", cursor: "pointer",
+              }}>Ajouter la source</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {histOpen && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 200,
+          background: "rgba(61,40,23,0.35)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }} onClick={() => setHistOpen(false)}>
+          <div style={{
+            background: "var(--cream-50)", borderRadius: 16,
+            padding: "28px 32px", width: 560,
+            boxShadow: "0 24px 60px rgba(61,40,23,0.18)",
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 16, fontFamily: "var(--font-display)", color: "var(--ink-900)" }}>
+                  Historique des imports
+                </div>
+                <div style={{ fontSize: 12, color: "var(--ink-500)", marginTop: 3 }}>
+                  {HIST.length} fichiers importés
+                </div>
+              </div>
+              <button onClick={() => setHistOpen(false)} style={{
+                width: 28, height: 28, border: "1px solid var(--line)", borderRadius: 7,
+                background: "var(--cream-100)", cursor: "pointer", fontSize: 18, display: "flex",
+                alignItems: "center", justifyContent: "center", color: "var(--ink-600)",
+              }}>×</button>
+            </div>
+            <div style={{ borderTop: "1px solid var(--line)" }}>
+              {HIST.map(h => (
+                <div key={h.id} style={{
+                  display: "grid", gridTemplateColumns: "1fr auto",
+                  alignItems: "center", gap: 12,
+                  padding: "12px 0", borderBottom: "1px dashed var(--line)",
+                }}>
+                  <div>
+                    <div style={{ fontSize: 13, color: "var(--ink-800)", fontWeight: 500 }}>{h.file}</div>
+                    <div style={{ fontSize: 11, color: "var(--ink-500)", marginTop: 2, fontFamily: "var(--font-mono)" }}>
+                      {h.bank} · {h.date} · {h.n} transactions · {h.size}
+                    </div>
+                  </div>
+                  <button style={{
+                    padding: "4px 12px", fontSize: 11, border: "1px solid var(--line)",
+                    borderRadius: 6, background: "var(--cream-100)", cursor: "pointer", color: "var(--ink-700)",
+                  }}>Voir</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -788,6 +940,7 @@ function ImportPreview({ onConfirm, onCancel, txs, fileName, fileSize }) {
    3. Succès — confirmation + récap + prochaines étapes
    ───────────────────────────────────────────────────────────────── */
 function ImportSuccess({ onAgain, txs, fileName }) {
+  const navigate = useNavigate();
   const count  = txs?.length || 47;
   const debit  = txs ? txs.filter(t => t.amt < 0).reduce((s, t) => s + t.amt, 0) : -1695;
   const credit = txs ? txs.filter(t => t.amt > 0).reduce((s, t) => s + t.amt, 0) : 2560;
@@ -912,8 +1065,8 @@ function ImportSuccess({ onAgain, txs, fileName }) {
           </div>
         </div>
         <div className="su-hero-actions">
-          <button className="su-btn primary"><IcList size={14}/>Voir mes transactions</button>
-          <button className="su-btn"><IcHome size={14}/>Retour au tableau</button>
+          <button className="su-btn primary" onClick={() => navigate("/transactions")}><IcList size={14}/>Voir mes transactions</button>
+          <button className="su-btn" onClick={() => navigate("/")}><IcHome size={14}/>Retour au tableau</button>
           <button className="su-btn ghost" onClick={onAgain}>↺ Importer un autre relevé</button>
         </div>
       </div>
@@ -1081,7 +1234,7 @@ function ImportError({ onRetry, errorMsg, fileName }) {
         </div>
         <div className="ier-actions">
           <button className="ier-btn amber" onClick={onRetry}><IcImport size={14}/>Essayer un autre fichier</button>
-          <button className="ier-btn ghost">↻ Réessayer la lecture</button>
+          <button className="ier-btn ghost" onClick={onRetry}>↻ Réessayer la lecture</button>
         </div>
       </div>
 
