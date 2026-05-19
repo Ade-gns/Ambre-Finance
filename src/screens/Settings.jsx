@@ -235,17 +235,26 @@ function SettingsGeneral() {
 /* ─────────── 2. Comptes & banques ─────────── */
 function SettingsAccounts() {
   const FILTERS = ["Tous", "Courant", "Épargne", "Investissement"];
-  const [filter, setFilter] = useState("Tous");
-  const [accounts, setAccounts] = useState([
+  const [filter, setFilter]           = useState("Tous");
+  const [accounts, setAccounts]       = useState([
     { id: 1, name: "Compte courant", bank: "BNP Paribas",       type: "Courant",        color: "#b8693d", bal: 3284.40,  last: "12 mai",   tx: 142, parser: "PDF + CSV", on: true },
     { id: 2, name: "Livret A",       bank: "La Banque Postale", type: "Épargne",        color: "#6b7a4f", bal: 8120.00,  last: "08 avril", tx: 24,  parser: "CSV",        on: true },
     { id: 3, name: "PEA",            bank: "Boursorama",        type: "Investissement", color: "#3d2817", bal: 12450.78, last: "01 mars",  tx: 18,  parser: "OFX",        on: true },
     { id: 4, name: "Carte Revolut",  bank: "Revolut",           type: "E-money",        color: "#9d8b73", bal: 142.30,   last: "30 avril", tx: 31,  parser: "CSV",        on: false },
   ]);
+  const [editId, setEditId]           = useState(null);
+  const [draft, setDraft]             = useState({});
+  const [deleteId, setDeleteId]       = useState(null);
 
-  const toggleAccount = id => setAccounts(prev =>
-    prev.map(a => a.id === id ? { ...a, on: !a.on } : a)
-  );
+  const toggleAccount = id => setAccounts(prev => prev.map(a => a.id === id ? { ...a, on: !a.on } : a));
+
+  const startEdit = a => { setEditId(a.id); setDraft({ name: a.name, bank: a.bank }); setDeleteId(null); };
+  const saveEdit  = id => { setAccounts(prev => prev.map(a => a.id === id ? { ...a, ...draft } : a)); setEditId(null); };
+
+  const confirmDelete = id => {
+    if (deleteId === id) { setAccounts(prev => prev.filter(a => a.id !== id)); setDeleteId(null); }
+    else { setDeleteId(id); setEditId(null); setTimeout(() => setDeleteId(d => d === id ? null : d), 3000); }
+  };
 
   const visible = filter === "Tous" ? accounts : accounts.filter(a => a.type === filter);
 
@@ -274,51 +283,80 @@ function SettingsAccounts() {
         </div>
         <div>
           {visible.map(a => (
-            <div key={a.id} style={{
-              display: "grid",
-              gridTemplateColumns: "44px 1.4fr 1fr 130px 100px 32px 28px 28px",
-              gap: 14, alignItems: "center",
-              padding: "14px 0", borderBottom: "1px dashed var(--line)"
-            }}>
-              <div style={{
-                width: 40, height: 40, borderRadius: 10, background: a.color,
-                color: "var(--cream-50)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 18
-              }}>{a.bank[0].toLowerCase()}</div>
-              <div>
-                <div style={{ fontSize: 13.5, color: "var(--ink-900)", fontWeight: 500 }}>{a.name}</div>
-                <div style={{ fontSize: 11.5, color: "var(--ink-500)", marginTop: 2 }}>{a.bank} · {a.type}</div>
-              </div>
-              <div>
-                <div style={{ fontFamily: "var(--font-display)", fontSize: 20, color: "var(--ink-900)" }}>
-                  {fmtEUR(a.bal, 0)}
+            <div key={a.id} style={{ borderBottom: "1px dashed var(--line)" }}>
+              {editId === a.id ? (
+                <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "12px 0" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: a.color, flexShrink: 0,
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                color: "var(--cream-50)", fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 18 }}>
+                    {a.bank[0].toLowerCase()}
+                  </div>
+                  <input className="stg-input" value={draft.name} style={{ flex: 1 }}
+                         onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}/>
+                  <input className="stg-input" value={draft.bank} style={{ flex: 1 }}
+                         onChange={e => setDraft(d => ({ ...d, bank: e.target.value }))}/>
+                  <button className="stg-btn amber" onClick={() => saveEdit(a.id)}>Enregistrer</button>
+                  <button className="stg-btn" onClick={() => setEditId(null)}>Annuler</button>
                 </div>
-                <div style={{ fontSize: 10.5, color: "var(--ink-500)", fontFamily: "var(--font-mono)", marginTop: 2 }}>
-                  {a.tx} transactions
+              ) : deleteId === a.id ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0",
+                              background: "rgba(168,90,72,0.05)", borderRadius: 8, paddingLeft: 12 }}>
+                  <span style={{ flex: 1, fontSize: 13, color: "var(--rose-500)" }}>
+                    Supprimer « {a.name} » ? Cette action est irréversible.
+                  </span>
+                  <button className="stg-btn danger" style={{ borderColor: "var(--rose-500)" }}
+                          onClick={() => confirmDelete(a.id)}>Confirmer</button>
+                  <button className="stg-btn" onClick={() => setDeleteId(null)}>Annuler</button>
                 </div>
-              </div>
-              <span style={{ fontSize: 11, color: "var(--ink-500)", fontFamily: "var(--font-mono)" }}>
-                Dernier import · <br/><strong style={{ color: "var(--ink-800)" }}>{a.last}</strong>
-              </span>
-              <span style={{
-                fontSize: 10.5, padding: "3px 8px", borderRadius: 999,
-                background: "var(--cream-200)", color: "var(--ink-700)",
-                fontFamily: "var(--font-mono)", justifySelf: "start"
-              }}>{a.parser}</span>
-              <span className={"stg-tg" + (a.on ? "" : " off")} onClick={() => toggleAccount(a.id)}/>
-              <button className="stg-btn" style={{ padding: 0, width: 28, height: 28, justifyContent: "center" }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M11 4H4v16h16v-7"/><path d="M18 2l4 4-12 12H6v-4z"/>
-                </svg>
-              </button>
-              <button className="stg-btn danger" style={{ padding: 0, width: 28, height: 28, justifyContent: "center" }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                </svg>
-              </button>
+              ) : (
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "44px 1.4fr 1fr 130px 100px 32px 28px 28px",
+                  gap: 14, alignItems: "center", padding: "14px 0",
+                }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 10, background: a.color,
+                    color: "var(--cream-50)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 18
+                  }}>{a.bank[0].toLowerCase()}</div>
+                  <div>
+                    <div style={{ fontSize: 13.5, color: "var(--ink-900)", fontWeight: 500 }}>{a.name}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--ink-500)", marginTop: 2 }}>{a.bank} · {a.type}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontFamily: "var(--font-display)", fontSize: 20, color: "var(--ink-900)" }}>
+                      {fmtEUR(a.bal, 0)}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: "var(--ink-500)", fontFamily: "var(--font-mono)", marginTop: 2 }}>
+                      {a.tx} transactions
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 11, color: "var(--ink-500)", fontFamily: "var(--font-mono)" }}>
+                    Dernier import · <br/><strong style={{ color: "var(--ink-800)" }}>{a.last}</strong>
+                  </span>
+                  <span style={{
+                    fontSize: 10.5, padding: "3px 8px", borderRadius: 999,
+                    background: "var(--cream-200)", color: "var(--ink-700)",
+                    fontFamily: "var(--font-mono)", justifySelf: "start"
+                  }}>{a.parser}</span>
+                  <span className={"stg-tg" + (a.on ? "" : " off")} onClick={() => toggleAccount(a.id)}/>
+                  <button className="stg-btn" onClick={() => startEdit(a)}
+                          style={{ padding: 0, width: 28, height: 28, justifyContent: "center" }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4v16h16v-7"/><path d="M18 2l4 4-12 12H6v-4z"/>
+                    </svg>
+                  </button>
+                  <button className="stg-btn danger" onClick={() => confirmDelete(a.id)}
+                          style={{ padding: 0, width: 28, height: 28, justifyContent: "center" }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                    </svg>
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -388,9 +426,47 @@ function SettingsAlerts() {
     { name: "Doublon potentiel",        desc: "Deux transactions identiques en 48h",          ico: "≈" },
   ];
 
-  const toggleAlert = id => setAlerts(prev =>
-    prev.map(a => a.id === id ? { ...a, on: !a.on } : a)
-  );
+  const [editAlertId, setEditAlertId]   = useState(null);
+  const [alertDraft, setAlertDraft]     = useState({});
+  const [deleteAlertId, setDeleteAlertId] = useState(null);
+  const [showForm, setShowForm]         = useState(false);
+  const [newAlert, setNewAlert]         = useState({ name: "", cond: "", thr: "" });
+  const [activatedTpl, setActivatedTpl] = useState(null);
+
+  const COLORS = ["#b8693d","#a85a48","#6b7a4f","#9d8b73","#3d2817","#cd8459"];
+
+  const toggleAlert = id => setAlerts(prev => prev.map(a => a.id === id ? { ...a, on: !a.on } : a));
+
+  const startEditAlert = a => { setEditAlertId(a.id); setAlertDraft({ name: a.name, cond: a.cond, thr: a.thr }); setDeleteAlertId(null); };
+  const saveEditAlert  = id => { setAlerts(prev => prev.map(a => a.id === id ? { ...a, ...alertDraft } : a)); setEditAlertId(null); };
+
+  const confirmDeleteAlert = id => {
+    if (deleteAlertId === id) { setAlerts(prev => prev.filter(a => a.id !== id)); setDeleteAlertId(null); }
+    else { setDeleteAlertId(id); setEditAlertId(null); setTimeout(() => setDeleteAlertId(d => d === id ? null : d), 3000); }
+  };
+
+  const addAlert = () => {
+    if (!newAlert.name.trim()) return;
+    setAlerts(prev => [...prev, {
+      id: Date.now(), name: newAlert.name,
+      cond: newAlert.cond || "Condition personnalisée",
+      thr: newAlert.thr || "— custom —",
+      now: "—", state: "ok", on: true,
+      color: COLORS[prev.length % COLORS.length],
+    }]);
+    setNewAlert({ name: "", cond: "", thr: "" });
+    setShowForm(false);
+  };
+
+  const activateTemplate = tp => {
+    setAlerts(prev => [...prev, {
+      id: Date.now(), name: tp.name, cond: tp.desc,
+      thr: "— auto —", now: "—", state: "ok", on: true,
+      color: COLORS[prev.length % COLORS.length],
+    }]);
+    setActivatedTpl(tp.name);
+    setTimeout(() => setActivatedTpl(null), 2000);
+  };
 
   const ALERT_FILTERS = ["Toutes", "Seuils", "Anomalies"];
   const visible = alertFilter === "Toutes" ? alerts
@@ -404,9 +480,40 @@ function SettingsAlerts() {
         title='Mes <em>alertes</em>.'
         actions={<>
           <button className="stg-btn"><IcImport size={14}/>Importer un modèle</button>
-          <button className="stg-btn amber"><IcPlus size={14}/>Nouvelle alerte</button>
+          <button className="stg-btn amber" onClick={() => { setShowForm(v => !v); setEditAlertId(null); }}>
+            <IcPlus size={14}/>{showForm ? "Annuler" : "Nouvelle alerte"}
+          </button>
         </>}
       />
+
+      {showForm && (
+        <div className="stg-card" style={{ border: "1px solid var(--amber-500)" }}>
+          <div className="stg-card-t">Nouvelle alerte</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div className="stg-row" style={{ padding: "8px 0" }}>
+              <div className="stg-row-lbl">Nom</div>
+              <input className="stg-input" placeholder="ex. Budget Vacances" value={newAlert.name}
+                     onChange={e => setNewAlert(d => ({ ...d, name: e.target.value }))}/>
+            </div>
+            <div className="stg-row" style={{ padding: "8px 0" }}>
+              <div className="stg-row-lbl">Condition</div>
+              <input className="stg-input" placeholder="ex. Dépenses Vacances ≥ 80 %" value={newAlert.cond}
+                     onChange={e => setNewAlert(d => ({ ...d, cond: e.target.value }))}/>
+            </div>
+            <div className="stg-row" style={{ padding: "8px 0", borderBottom: "none" }}>
+              <div className="stg-row-lbl">Seuil</div>
+              <input className="stg-input" placeholder="ex. 800 €" value={newAlert.thr}
+                     onChange={e => setNewAlert(d => ({ ...d, thr: e.target.value }))}/>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="stg-btn amber" onClick={addAlert}>
+              <IcPlus size={13}/>Ajouter l'alerte
+            </button>
+            <button className="stg-btn" onClick={() => setShowForm(false)}>Annuler</button>
+          </div>
+        </div>
+      )}
 
       {/* Canaux de notification */}
       <div className="stg-channels">
@@ -464,7 +571,32 @@ function SettingsAlerts() {
           </div>
         </div>
         {visible.map(a => (
-          <div key={a.id} className="stg-alert">
+          <div key={a.id}>
+          {editAlertId === a.id ? (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "12px 22px",
+                          borderBottom: "1px dashed var(--line)", background: "var(--cream-100)" }}>
+              <div className="stg-alert-ico" style={{ background: a.color, flexShrink: 0 }}><IcBell size={16}/></div>
+              <input className="stg-input" value={alertDraft.name} style={{ flex: 1 }}
+                     onChange={e => setAlertDraft(d => ({ ...d, name: e.target.value }))}/>
+              <input className="stg-input" value={alertDraft.cond} style={{ flex: 2 }}
+                     onChange={e => setAlertDraft(d => ({ ...d, cond: e.target.value }))}/>
+              <input className="stg-input" value={alertDraft.thr} style={{ width: 110 }}
+                     onChange={e => setAlertDraft(d => ({ ...d, thr: e.target.value }))}/>
+              <button className="stg-btn amber" onClick={() => saveEditAlert(a.id)}>Enregistrer</button>
+              <button className="stg-btn" onClick={() => setEditAlertId(null)}>Annuler</button>
+            </div>
+          ) : deleteAlertId === a.id ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 22px",
+                          borderBottom: "1px dashed var(--line)", background: "rgba(168,90,72,0.05)" }}>
+              <span style={{ flex: 1, fontSize: 13, color: "var(--rose-500)" }}>
+                Supprimer « {a.name} » ?
+              </span>
+              <button className="stg-btn danger" style={{ borderColor: "var(--rose-500)" }}
+                      onClick={() => confirmDeleteAlert(a.id)}>Confirmer</button>
+              <button className="stg-btn" onClick={() => setDeleteAlertId(null)}>Annuler</button>
+            </div>
+          ) : (
+          <div className="stg-alert">
             <div className="stg-alert-ico" style={{ background: a.color }}>
               <IcBell size={16}/>
             </div>
@@ -478,18 +610,22 @@ function SettingsAlerts() {
               {a.now}
             </span>
             <span className={"stg-tg" + (a.on ? "" : " off")} onClick={() => toggleAlert(a.id)}/>
-            <button className="stg-btn" style={{ padding: 0, width: 28, height: 28, justifyContent: "center" }}>
+            <button className="stg-btn" onClick={() => startEditAlert(a)}
+                    style={{ padding: 0, width: 28, height: 28, justifyContent: "center" }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M11 4H4v16h16v-7"/><path d="M18 2l4 4-12 12H6v-4z"/>
               </svg>
             </button>
-            <button className="stg-btn danger" style={{ padding: 0, width: 28, height: 28, justifyContent: "center" }}>
+            <button className="stg-btn danger" onClick={() => confirmDeleteAlert(a.id)}
+                    style={{ padding: 0, width: 28, height: 28, justifyContent: "center" }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
               </svg>
             </button>
+          </div>
+          )}
           </div>
         ))}
 
@@ -505,19 +641,23 @@ function SettingsAlerts() {
             <span>Modèles prêts à activer</span>
             <span style={{ flex: 1, height: 1, background: "var(--line)" }}/>
           </div>
-          {templates.map(tp => (
-            <div key={tp.name} className="stg-tpl">
-              <div className="stg-tpl-h">
-                <div className="stg-tpl-ico">{tp.ico}</div>
-                <span style={{ fontSize: 10, color: "var(--amber-500)",
-                              display: "flex", alignItems: "center", gap: 4 }}>
-                  <IcPlus size={11}/>Activer
-                </span>
+          {templates.map(tp => {
+            const done = activatedTpl === tp.name;
+            return (
+              <div key={tp.name} className="stg-tpl" onClick={() => !done && activateTemplate(tp)}
+                   style={{ borderColor: done ? "var(--sage-500)" : undefined }}>
+                <div className="stg-tpl-h">
+                  <div className="stg-tpl-ico">{tp.ico}</div>
+                  <span style={{ fontSize: 10, display: "flex", alignItems: "center", gap: 4,
+                                 color: done ? "var(--sage-500)" : "var(--amber-500)" }}>
+                    {done ? "✓ Ajoutée" : <><IcPlus size={11}/>Activer</>}
+                  </span>
+                </div>
+                <div className="stg-tpl-t">{tp.name}</div>
+                <div className="stg-tpl-d">{tp.desc}</div>
               </div>
-              <div className="stg-tpl-t">{tp.name}</div>
-              <div className="stg-tpl-d">{tp.desc}</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </>
