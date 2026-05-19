@@ -84,13 +84,26 @@ function SettingsGeneral() {
   const [premierJour, setPremierJour]   = useState(0);
   const [verrouiller, setVerrouiller]   = useState(false);
   const [lancer, setLancer]             = useState(false);
+  const [saved, setSaved]               = useState(false);
+
+  const handleSave = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
 
   return (
     <>
       <SubHeader
         breadcrumb="Général"
         title='Réglages <em>généraux</em>.'
-        actions={<button className="stg-btn amber">Enregistrer</button>}
+        actions={
+          <button className="stg-btn amber" onClick={handleSave}
+                  style={{ minWidth: 110, justifyContent: "center",
+                           background: saved ? "var(--sage-500)" : undefined,
+                           borderColor: saved ? "var(--sage-500)" : undefined }}>
+            {saved ? "✓ Enregistré" : "Enregistrer"}
+          </button>
+        }
       />
 
       <div className="stg-card">
@@ -514,15 +527,50 @@ function SettingsAlerts() {
 /* ─────────── 5. Sauvegarde & données ─────────── */
 function SettingsBackup() {
   const FREQ = ["Manuelle", "Quotidienne", "Hebdomadaire", "Mensuelle"];
-  const [backupOn, setBackupOn] = useState(false);
-  const [freq, setFreq]         = useState(2);
+  const [backupOn, setBackupOn]       = useState(false);
+  const [freq, setFreq]               = useState(2);
+  const [integrity, setIntegrity]     = useState("idle");   // idle | checking | ok
+  const [backupRun, setBackupRun]     = useState("idle");   // idle | running | done
+  const [exportDone, setExportDone]   = useState(null);     // null | ".csv" | ...
+  const [danger, setDanger]           = useState(null);     // null | "tx" | "cat" | "all"
+
+  const checkIntegrity = () => {
+    setIntegrity("checking");
+    setTimeout(() => { setIntegrity("ok"); setTimeout(() => setIntegrity("idle"), 3000); }, 1400);
+  };
+
+  const launchBackup = () => {
+    setBackupRun("running");
+    setTimeout(() => { setBackupRun("done"); setTimeout(() => setBackupRun("idle"), 2500); }, 1800);
+  };
+
+  const handleExport = fmt => {
+    setExportDone(fmt);
+    setTimeout(() => setExportDone(null), 2000);
+  };
+
+  const handleDanger = key => {
+    if (danger === key) { setDanger(null); }
+    else { setDanger(key); setTimeout(() => setDanger(d => d === key ? null : d), 3000); }
+  };
 
   return (
     <>
       <SubHeader
         breadcrumb="Sauvegarde & données"
         title='Vos <em>données</em>.'
-        actions={<button className="stg-btn"><IcLock size={13}/>Vérifier l'intégrité</button>}
+        actions={
+          <button className="stg-btn" onClick={checkIntegrity} style={{
+            minWidth: 148, justifyContent: "center",
+            color:       integrity === "ok" ? "var(--sage-500)" : undefined,
+            borderColor: integrity === "ok" ? "rgba(107,122,79,0.4)" : undefined,
+          }}>
+            <IcLock size={13}/>
+            {integrity === "checking" ? "Vérification…"
+            : integrity === "ok"      ? "✓ Intégrité OK"
+            :                           "Vérifier l'intégrité"}
+          </button>
+        }
       />
 
       <div className="stg-card">
@@ -630,7 +678,19 @@ function SettingsBackup() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="stg-btn amber"><IcUpload size={13}/>Lancer une sauvegarde maintenant</button>
+          <button className="stg-btn amber" onClick={launchBackup}
+                  disabled={backupRun === "running"}
+                  style={{
+                    minWidth: 220, justifyContent: "center",
+                    background: backupRun === "done" ? "var(--sage-500)" : undefined,
+                    borderColor: backupRun === "done" ? "var(--sage-500)" : undefined,
+                    opacity: backupRun === "running" ? 0.7 : 1,
+                  }}>
+            <IcUpload size={13}/>
+            {backupRun === "running" ? "Sauvegarde en cours…"
+            : backupRun === "done"   ? "✓ Sauvegarde créée"
+            :                          "Lancer une sauvegarde maintenant"}
+          </button>
           <button className="stg-btn"><IcImport size={13}/>Restaurer depuis une sauvegarde</button>
         </div>
       </div>
@@ -646,17 +706,21 @@ function SettingsBackup() {
             { fmt: ".json", desc: "Structure complète, règles incluses" },
             { fmt: ".ofx",  desc: "Compatible MoneyDance, GnuCash" },
             { fmt: ".pdf",  desc: "Rapport mensuel lisible" },
-          ].map(f => (
-            <button key={f.fmt} className="stg-btn" style={{
-              padding: "10px 14px", flexDirection: "column",
-              alignItems: "flex-start", gap: 2
-            }}>
-              <span style={{ fontFamily: "var(--font-mono)", color: "var(--amber-500)", fontSize: 13 }}>
-                {f.fmt}
-              </span>
-              <span style={{ fontSize: 11, color: "var(--ink-500)" }}>{f.desc}</span>
-            </button>
-          ))}
+          ].map(f => {
+            const done = exportDone === f.fmt;
+            return (
+              <button key={f.fmt} className="stg-btn" onClick={() => handleExport(f.fmt)} style={{
+                padding: "10px 14px", flexDirection: "column", alignItems: "flex-start", gap: 2,
+                borderColor: done ? "rgba(107,122,79,0.4)" : undefined,
+              }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 13,
+                               color: done ? "var(--sage-500)" : "var(--amber-500)" }}>
+                  {done ? "✓ exporté" : f.fmt}
+                </span>
+                <span style={{ fontSize: 11, color: "var(--ink-500)" }}>{f.desc}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -667,12 +731,23 @@ function SettingsBackup() {
             Ces actions sont irréversibles. Une sauvegarde est fortement recommandée au préalable.
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="stg-btn danger">Effacer les transactions importées</button>
-          <button className="stg-btn danger">Réinitialiser les catégories</button>
-          <button className="stg-btn danger" style={{ background: "rgba(168,90,72,0.08)" }}>
-            Tout effacer (DB + parsers)
-          </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {[
+            { key: "tx",  label: "Effacer les transactions importées" },
+            { key: "cat", label: "Réinitialiser les catégories" },
+            { key: "all", label: "Tout effacer (DB + parsers)", strong: true },
+          ].map(({ key, label, strong }) => {
+            const pending = danger === key;
+            return (
+              <button key={key} className="stg-btn danger" onClick={() => handleDanger(key)} style={{
+                background: pending ? "rgba(168,90,72,0.15)" : strong ? "rgba(168,90,72,0.08)" : undefined,
+                borderColor: pending ? "var(--rose-500)" : undefined,
+                fontWeight: pending ? 500 : undefined,
+              }}>
+                {pending ? `⚠ Confirmer : ${label} ?` : label}
+              </button>
+            );
+          })}
         </div>
       </div>
     </>
