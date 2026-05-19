@@ -6,6 +6,7 @@
    - Compteurs KPI mis à jour en live */
 
 import { useState, useMemo } from "react";
+import { useLocalStorage } from "../lib/storage";
 import {
   IcBell, IcSettings, IcFilter, IcCalendar, IcChevDn
 } from "../lib/icons";
@@ -101,7 +102,7 @@ function AlertKindIcon({ kind }) {
 }
 
 export default function Alerts() {
-  const [alerts, setAlerts] = useState(INITIAL_ALERTS);
+  const [alerts, setAlerts] = useLocalStorage("alerts", INITIAL_ALERTS);
   const [filter, setFilter] = useState("all");
 
   const markAsRead = (id) => {

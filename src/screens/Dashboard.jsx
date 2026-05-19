@@ -3,6 +3,7 @@
    Layout : sidebar (gérée par App) + main (ce composant). */
 
 import { useState, useRef, useEffect } from "react";
+import { useLocalStorage } from "../lib/storage";
 import { useNavigate } from "react-router-dom";
 import { CATEGORIES, MONTHLY, TRANSACTIONS } from "../data/mockData";
 import {
@@ -29,9 +30,9 @@ const MONTH_INFO = [
 
 export default function Dashboard() {
   const navigate    = useNavigate();
-  const [monthIdx, setMonthIdx]     = useState(MONTHLY.length - 1);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [chartPeriod, setChartPeriod] = useState("12 m");
+  const [monthIdx, setMonthIdx]       = useLocalStorage("dash.monthIdx", MONTHLY.length - 1);
+  const [pickerOpen, setPickerOpen]   = useState(false);
+  const [chartPeriod, setChartPeriod] = useLocalStorage("dash.chartPeriod", "12 m");
   const pickerRef = useRef(null);
 
   useEffect(() => {

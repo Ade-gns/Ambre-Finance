@@ -7,6 +7,7 @@
    6. abt  — À propos */
 
 import { useState } from "react";
+import { useLocalStorage } from "../lib/storage";
 import { fmtEUR } from "../lib/chartPrimitives";
 import {
   IcSettings, IcWallet, IcTag, IcBell, IcLock, IcSun, IcDot,
@@ -79,11 +80,11 @@ function SubHeader({ breadcrumb, title, actions }) {
 
 /* ─────────── 1. Général ─────────── */
 function SettingsGeneral() {
-  const [montantFmt, setMontantFmt]     = useState(1);
-  const [dateFmt, setDateFmt]           = useState(0);
-  const [premierJour, setPremierJour]   = useState(0);
-  const [verrouiller, setVerrouiller]   = useState(false);
-  const [lancer, setLancer]             = useState(false);
+  const [montantFmt, setMontantFmt]     = useLocalStorage("stg.montantFmt", 1);
+  const [dateFmt, setDateFmt]           = useLocalStorage("stg.dateFmt", 0);
+  const [premierJour, setPremierJour]   = useLocalStorage("stg.premierJour", 0);
+  const [verrouiller, setVerrouiller]   = useLocalStorage("stg.verrouiller", false);
+  const [lancer, setLancer]             = useLocalStorage("stg.lancer", false);
   const [saved, setSaved]               = useState(false);
 
   const handleSave = () => {
@@ -409,7 +410,7 @@ function SettingsCategoriesRedirect() {
 
 /* ─────────── 4. Alertes ─────────── */
 function SettingsAlerts() {
-  const [channels, setChannels] = useState({ systeme: true, os: true, offline: false });
+  const [channels, setChannels] = useLocalStorage("stg.channels", { systeme: true, os: true, offline: false });
   const [alertFilter, setAlertFilter] = useState("Toutes");
   const [alerts, setAlerts] = useState([
     { id: 1, name: "Loyer encaissé",            cond: "Réception d'un virement contenant « salaire »",   thr: "✓ détection",   now: "12 mai",   state: "ok",   on: true,  color: "#6b7a4f" },
@@ -667,8 +668,8 @@ function SettingsAlerts() {
 /* ─────────── 5. Sauvegarde & données ─────────── */
 function SettingsBackup() {
   const FREQ = ["Manuelle", "Quotidienne", "Hebdomadaire", "Mensuelle"];
-  const [backupOn, setBackupOn]       = useState(false);
-  const [freq, setFreq]               = useState(2);
+  const [backupOn, setBackupOn]       = useLocalStorage("stg.backupOn", false);
+  const [freq, setFreq]               = useLocalStorage("stg.backupFreq", 2);
   const [integrity, setIntegrity]     = useState("idle");   // idle | checking | ok
   const [backupRun, setBackupRun]     = useState("idle");   // idle | running | done
   const [exportDone, setExportDone]   = useState(null);     // null | ".csv" | ...
@@ -911,11 +912,11 @@ function SettingsAppearance() {
   const TAILLES  = ["Compacte", "Normale", "Agréable"];
   const DENSITES = ["Compacte", "Confortable", "Spacieuse"];
 
-  const [theme,   setTheme]   = useState("clair");
-  const [accent,  setAccent]  = useState("Ambre");
-  const [taille,  setTaille]  = useState(1);
-  const [densite, setDensite] = useState(1);
-  const [reduire, setReduire] = useState(false);
+  const [theme,   setTheme]   = useLocalStorage("stg.theme",   "clair");
+  const [accent,  setAccent]  = useLocalStorage("stg.accent",  "Ambre");
+  const [taille,  setTaille]  = useLocalStorage("stg.taille",  1);
+  const [densite, setDensite] = useLocalStorage("stg.densite", 1);
+  const [reduire, setReduire] = useLocalStorage("stg.reduire", false);
 
   return (
     <>
