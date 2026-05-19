@@ -5,7 +5,7 @@
 @import './styles/tokens.css';
 
 /* Reset spécifique app — overflow géré au niveau App.jsx, pas body */
-html, body { background: var(--cream-200); }
+html, body { background: var(--page-bg); }
 
 #root {
   width: 100vw;

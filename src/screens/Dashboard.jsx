@@ -74,7 +74,7 @@ export default function Dashboard() {
           display: flex; flex-direction: column;
           gap: 14px;
           overflow: auto;
-          background: #efe7d6;
+          background: var(--page-bg);
           color: var(--ink-800);
           font-size: 13px;
           height: 100%;
@@ -199,7 +199,7 @@ export default function Dashboard() {
           font-size: 9px; font-family: var(--font-mono);
           color: var(--ink-700);
         }
-        .atc-heat-cell.future { background: rgba(61,40,23,0.04); color: rgba(61,40,23,0.25); }
+        .atc-heat-cell.future { background: var(--grid-line); color: var(--ink-400); }
         .atc-heat-cell.today  { outline: 1.5px solid var(--amber-500); outline-offset: -1px; }
 
         /* Timeline transactions */
@@ -237,7 +237,7 @@ export default function Dashboard() {
           position: absolute; top: calc(100% + 6px); right: 0; z-index: 100;
           background: var(--cream-50); border: 1px solid var(--line);
           border-radius: 12px; padding: 6px;
-          box-shadow: 0 8px 24px rgba(61,40,23,0.12);
+          box-shadow: 0 8px 24px var(--shadow-soft);
           min-width: 200px;
           max-height: 320px; overflow-y: auto;
         }
@@ -561,9 +561,9 @@ function AreaChartLight({ period = "12 m" }) {
         const y = padY + innerH - t * innerH;
         return (
           <g key={i}>
-            <line x1={padX} x2={width - padR} y1={y} y2={y} stroke="rgba(61,40,23,0.08)"/>
+            <line x1={padX} x2={width - padR} y1={y} y2={y} style={{ stroke: "var(--grid-line)" }}/>
             <text x={padX - 6} y={y + 4} textAnchor="end" fontSize="9"
-                  fontFamily="var(--font-mono)" fill="rgba(61,40,23,0.5)">
+                  fontFamily="var(--font-mono)" style={{ fill: "var(--ink-500)" }}>
               {Math.round(min + t * (max - min)).toLocaleString("fr-FR")}
             </text>
           </g>
@@ -576,7 +576,7 @@ function AreaChartLight({ period = "12 m" }) {
       {slice.map((m, i) => (
         i % 2 === 0 && (
           <text key={i} x={xs[i]} y={height - 6} textAnchor="middle" fontSize="9"
-                fontFamily="var(--font-ui)" fill="rgba(61,40,23,0.5)">{m.m}</text>
+                fontFamily="var(--font-ui)" style={{ fill: "var(--ink-500)" }}>{m.m}</text>
         )
       ))}
     </svg>

@@ -240,7 +240,7 @@ function SettingsGeneral() {
                   <div style={{
                     position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 50,
                     background: "var(--cream-50)", border: "1px solid var(--line)",
-                    borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+                    borderRadius: 10, boxShadow: "0 8px 24px var(--shadow-soft)",
                     minWidth: 200, overflow: "hidden",
                   }}>
                     {HOME_OPTIONS.map(opt => (
@@ -449,13 +449,13 @@ function SettingsAccounts() {
       {showAddAccount && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 200,
-          background: "rgba(61,40,23,0.35)", backdropFilter: "blur(4px)",
+          background: "var(--overlay-scrim)", backdropFilter: "blur(4px)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }} onClick={() => setShowAddAccount(false)}>
           <div style={{
             background: "var(--cream-50)", borderRadius: 16,
             padding: "28px 32px", width: 440,
-            boxShadow: "0 24px 60px rgba(61,40,23,0.18)",
+            boxShadow: "0 24px 60px var(--shadow-modal)",
             display: "flex", flexDirection: "column", gap: 20,
           }} onClick={e => e.stopPropagation()}>
             <div>
@@ -1330,7 +1330,7 @@ const STG_STYLES = `
   .stg-main { display: grid; grid-template-columns: 240px 1fr; gap: 20px;
               height: 100%; overflow: hidden;
               padding: 22px 28px 0;
-              background: #efe7d6; color: var(--ink-800); font-size: 13px; }
+              background: var(--page-bg); color: var(--ink-800); font-size: 13px; }
 
   /* Sub-nav */
   .stg-sub { display: flex; flex-direction: column; gap: 4px; padding-top: 6px;

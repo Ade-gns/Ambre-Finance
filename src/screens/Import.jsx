@@ -207,7 +207,7 @@ function ImportEmpty({ onFile }) {
       <style>{`
         .ie-main { padding: 22px 28px; display: flex; flex-direction: column;
                    gap: 16px; height: 100%; overflow: auto;
-                   background: #efe7d6; color: var(--ink-800); font-size: 13px; }
+                   background: var(--page-bg); color: var(--ink-800); font-size: 13px; }
         .ie-top { display: flex; align-items: flex-end; justify-content: space-between; }
         .ie-bread { font-size: 11px; color: var(--ink-500); letter-spacing: 0.06em; text-transform: uppercase; }
         .ie-bread strong { color: var(--ink-800); font-weight: 500; letter-spacing: 0; text-transform: none; }
@@ -442,13 +442,13 @@ function ImportEmpty({ onFile }) {
       {addSourceOpen && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 200,
-          background: "rgba(61,40,23,0.35)", backdropFilter: "blur(4px)",
+          background: "var(--overlay-scrim)", backdropFilter: "blur(4px)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }} onClick={() => setAddSourceOpen(false)}>
           <div style={{
             background: "var(--cream-50)", borderRadius: 16,
             padding: "28px 32px", width: 420,
-            boxShadow: "0 24px 60px rgba(61,40,23,0.18)",
+            boxShadow: "0 24px 60px var(--shadow-modal)",
           }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
               <div style={{ fontSize: 16, fontFamily: "var(--font-display)", color: "var(--ink-900)" }}>
@@ -501,13 +501,13 @@ function ImportEmpty({ onFile }) {
       {histOpen && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 200,
-          background: "rgba(61,40,23,0.35)", backdropFilter: "blur(4px)",
+          background: "var(--overlay-scrim)", backdropFilter: "blur(4px)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }} onClick={() => setHistOpen(false)}>
           <div style={{
             background: "var(--cream-50)", borderRadius: 16,
             padding: "28px 32px", width: 560,
-            boxShadow: "0 24px 60px rgba(61,40,23,0.18)",
+            boxShadow: "0 24px 60px var(--shadow-modal)",
           }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
               <div>
@@ -613,7 +613,7 @@ function ImportPreview({ onConfirm, onCancel, txs, fileName, fileSize }) {
       <style>{`
         .ip-main { padding: 22px 28px; display: flex; flex-direction: column;
                    gap: 14px; height: 100%; overflow: hidden;
-                   background: #efe7d6; color: var(--ink-800); font-size: 13px; }
+                   background: var(--page-bg); color: var(--ink-800); font-size: 13px; }
         .ip-top { display: flex; align-items: flex-end; justify-content: space-between; }
         .ip-bread { font-size: 11px; color: var(--ink-500); letter-spacing: 0.06em;
                     text-transform: uppercase;
@@ -704,7 +704,7 @@ function ImportPreview({ onConfirm, onCancel, txs, fileName, fileSize }) {
         .ip-cat-picker { position: absolute; top: calc(100% + 4px); left: 0; z-index: 20;
                          background: var(--cream-50); border: 1px solid var(--amber-500);
                          border-radius: 10px; padding: 6px; min-width: 160px;
-                         box-shadow: 0 4px 14px rgba(61,40,23,0.12); }
+                         box-shadow: 0 4px 14px var(--shadow-soft); }
         .ip-cat-picker div { display: flex; align-items: center; gap: 8px; padding: 7px 10px;
                               border-radius: 7px; cursor: pointer; font-size: 12px; }
         .ip-cat-picker div:hover { background: var(--amber-100); }
@@ -951,7 +951,7 @@ function ImportSuccess({ onAgain, txs, fileName }) {
       <style>{`
         .su-main { padding: 22px 28px; display: flex; flex-direction: column;
                    gap: 18px; height: 100%; overflow: auto;
-                   background: #efe7d6; color: var(--ink-800); font-size: 13px; }
+                   background: var(--page-bg); color: var(--ink-800); font-size: 13px; }
         .su-bread { font-size: 11px; color: var(--ink-500);
                     letter-spacing: 0.06em; text-transform: uppercase;
                     display: flex; align-items: center; gap: 6px; }
@@ -1151,7 +1151,7 @@ function ImportError({ onRetry, errorMsg, fileName }) {
       <style>{`
         .ier-main { padding: 22px 28px; display: flex; flex-direction: column;
                     gap: 16px; height: 100%; overflow: auto;
-                    background: #efe7d6; color: var(--ink-800); font-size: 13px; }
+                    background: var(--page-bg); color: var(--ink-800); font-size: 13px; }
         .ier-bread { font-size: 11px; color: var(--ink-500);
                      letter-spacing: 0.06em; text-transform: uppercase;
                      display: flex; align-items: center; gap: 6px; }

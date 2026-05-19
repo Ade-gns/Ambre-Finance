@@ -87,7 +87,7 @@ export default function Evolution() {
               <div style={{
                 position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
                 background: "var(--cream-50)", border: "1px solid var(--line)",
-                borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+                borderRadius: 10, boxShadow: "0 8px 24px var(--shadow-soft)",
                 minWidth: 220, overflow: "hidden",
               }}>
                 {PERIODS.map(p => (
@@ -257,9 +257,9 @@ function EvolutionHeroChart({ months, prev }) {
         const y = padY + innerH - t * innerH;
         return (
           <g key={i}>
-            <line x1={padX} x2={width - padR} y1={y} y2={y} stroke="rgba(61,40,23,0.07)"/>
+            <line x1={padX} x2={width - padR} y1={y} y2={y} style={{ stroke: "var(--grid-line)" }}/>
             <text x={padX - 8} y={y + 4} textAnchor="end" fontSize="10"
-                  fontFamily="var(--font-mono)" fill="rgba(61,40,23,0.5)">
+                  fontFamily="var(--font-mono)" style={{ fill: "var(--ink-500)" }}>
               {Math.round(min + t * (max - min))} €
             </text>
           </g>
@@ -288,7 +288,7 @@ function EvolutionHeroChart({ months, prev }) {
       {months.length > 6 && (
         <>
           <line x1={xs[6]} y1={expPts[6][1] - 6} x2={xs[6]} y2={padY + 4}
-                stroke="rgba(61,40,23,0.3)" strokeDasharray="2 3"/>
+                style={{ stroke: "var(--ink-400)" }} strokeDasharray="2 3"/>
           <text x={xs[6]} y={padY - 2} textAnchor="middle" fontSize="10"
                 fontFamily="var(--font-mono)" fill="var(--ink-700)">
             pic · déc. {fmtEUR(months[6].exp, 0)}
@@ -299,7 +299,7 @@ function EvolutionHeroChart({ months, prev }) {
       {/* Labels des mois */}
       {months.map((m, i) => (
         <text key={i} x={xs[i]} y={height - 6} textAnchor="middle" fontSize="10"
-              fontFamily="var(--font-ui)" fill="rgba(61,40,23,0.5)">{m.m}</text>
+              fontFamily="var(--font-ui)" style={{ fill: "var(--ink-500)" }}>{m.m}</text>
       ))}
     </svg>
   );
@@ -311,7 +311,7 @@ function EvolutionHeroChart({ months, prev }) {
 const EV_STYLES = `
   .ev-main { padding: 22px 28px; display: flex; flex-direction: column; gap: 14px;
              height: 100%; overflow: auto;
-             background: #efe7d6; color: var(--ink-800); font-size: 13px; }
+             background: var(--page-bg); color: var(--ink-800); font-size: 13px; }
   .ev-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
   .ev-bread { font-size: 11px; color: var(--ink-500); letter-spacing: 0.06em; text-transform: uppercase; }
   .ev-bread strong { color: var(--ink-800); font-weight: 500; letter-spacing: 0; text-transform: none; }

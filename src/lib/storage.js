@@ -16,6 +16,9 @@ export function load(key, defaultValue) {
 /* Hook — remplace useState, persiste automatiquement dans localStorage. */
 export function useLocalStorage(key, defaultValue) {
   const [state, setState] = useState(() => load(key, defaultValue));
-  useEffect(() => { save(key, state); }, [key, state]);
+  useEffect(() => {
+    save(key, state);
+    window.dispatchEvent(new CustomEvent("ambre:storage", { detail: { key, value: state } }));
+  }, [key, state]);
   return [state, setState];
 }

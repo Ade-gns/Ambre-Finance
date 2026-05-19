@@ -196,7 +196,7 @@ function TxFilterBar({ withChips = true, filter = "all", onChangeFilter = () => 
             <div style={{
               position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
               background: "var(--cream-50)", border: "1px solid var(--line)",
-              borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+              borderRadius: 10, boxShadow: "0 8px 24px var(--shadow-soft)",
               minWidth: 180, overflow: "hidden",
             }}>
               {MONTHS_OPT.map(m => (
@@ -220,7 +220,7 @@ function TxFilterBar({ withChips = true, filter = "all", onChangeFilter = () => 
             <div style={{
               position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
               background: "var(--cream-50)", border: "1px solid var(--line)",
-              borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+              borderRadius: 10, boxShadow: "0 8px 24px var(--shadow-soft)",
               width: 230, padding: "14px 16px",
             }}>
               <div style={{ fontSize: 10, color: "var(--ink-500)", letterSpacing: "0.08em",
@@ -477,7 +477,7 @@ function TxDetail({ t: tSel, onClose }) {
       display: "grid",
       gridTemplateColumns: "1fr 360px",
       height: "100%",
-      background: "#efe7d6",
+      background: "var(--page-bg)",
     }}>
       <main className="tx-main with-panel">
         <TxHeader />
@@ -534,7 +534,7 @@ function TxDetail({ t: tSel, onClose }) {
           {catPickerOpen && (
             <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10,
                           background: "var(--cream-50)", border: "1px solid var(--amber-500)",
-                          borderRadius: 10, padding: 6, boxShadow: "0 4px 14px rgba(61,40,23,0.12)" }}>
+                          borderRadius: 10, padding: 6, boxShadow: "0 4px 14px var(--shadow-soft)" }}>
               {allCats.map(c => (
                 <div key={c.id} onClick={() => { setCatId(c.id); setCatPickerOpen(false); }}
                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px",
@@ -815,7 +815,7 @@ function TxBulk({ onClose, startIdx }) {
 const TX_STYLES = `
   .tx-main { padding: 22px 28px; display: flex; flex-direction: column; gap: 12px;
              height: 100%; overflow: hidden;
-             background: #efe7d6; color: var(--ink-800); font-size: 13px; }
+             background: var(--page-bg); color: var(--ink-800); font-size: 13px; }
   .tx-main.with-panel { padding-right: 0; }
   .tx-top { display: flex; align-items: flex-end; justify-content: space-between; }
   .tx-bread { font-size: 11px; color: var(--ink-500); letter-spacing: 0.06em; text-transform: uppercase; }
@@ -995,7 +995,7 @@ const TX_STYLES = `
   /* BULK ACTION BAR */
   .tx-bulk-bar { display: flex; align-items: center; gap: 14px; padding: 10px 18px;
                  background: var(--ink-800); color: var(--cream-50); border-radius: 10px;
-                 box-shadow: 0 4px 14px rgba(61,40,23,0.18); }
+                 box-shadow: 0 4px 14px var(--shadow-modal); }
   .tx-bulk-count { font-family: var(--font-display); font-size: 22px; }
   .tx-bulk-sep { width: 1px; height: 24px; background: rgba(232,224,208,0.2); }
   .tx-bulk-action { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px;

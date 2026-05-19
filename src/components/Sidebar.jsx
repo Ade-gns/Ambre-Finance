@@ -1,9 +1,11 @@
 // Sidebar — barre latérale partagée par tous les écrans.
 // Utilise React Router pour la navigation.
 
-import { NavLink, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { NavLink } from "react-router-dom";
+import { load, save } from "../lib/storage";
 import {
-  IcHome, IcImport, IcList, IcTag, IcChart, IcBell, IcSettings, IcSun, IcLock
+  IcHome, IcImport, IcList, IcTag, IcChart, IcBell, IcSettings, IcSun, IcMoon, IcLock
 } from "../lib/icons";
 
 const navItems = [
@@ -17,6 +19,26 @@ const navItems = [
 ];
 
 export default function Sidebar() {
+  const [theme, setTheme] = useState(() => load("stg.theme", "clair"));
+
+  useEffect(() => {
+    const handler = e => {
+      if (e.detail?.key === "stg.theme") setTheme(e.detail.value);
+    };
+    window.addEventListener("ambre:storage", handler);
+    return () => window.removeEventListener("ambre:storage", handler);
+  }, []);
+
+  function toggleTheme() {
+    const next = theme === "sombre" ? "clair" : "sombre";
+    save("stg.theme", next);
+    setTheme(next);
+    window.dispatchEvent(new CustomEvent("ambre:storage", { detail: { key: "stg.theme", value: next } }));
+  }
+
+  const isDark = theme === "sombre" ||
+    (theme === "auto" && typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+
   return (
     <aside className="atc-side">
       <style>{`
@@ -90,7 +112,13 @@ export default function Sidebar() {
       })}
 
       <div className="atc-side-foot">
-        <button className="atc-nav-btn" title="Thème"><IcSun size={18}/></button>
+        <button
+          className="atc-nav-btn"
+          title={isDark ? "Passer en mode clair" : "Passer en mode sombre"}
+          onClick={toggleTheme}
+        >
+          {isDark ? <IcMoon size={18}/> : <IcSun size={18}/>}
+        </button>
         <button className="atc-nav-btn" title="Verrouiller"><IcLock size={16}/></button>
       </div>
     </aside>

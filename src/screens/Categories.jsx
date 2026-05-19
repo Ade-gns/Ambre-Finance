@@ -179,7 +179,7 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty }) {
               <div style={{
                 position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 50,
                 background: "var(--cream-50)", border: "1px solid var(--line)",
-                borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+                borderRadius: 10, boxShadow: "0 8px 24px var(--shadow-soft)",
                 minWidth: 200, overflow: "hidden",
               }}>
                 <input ref={fileInputRef} type="file" accept=".csv" style={{ display: "none" }}
@@ -230,7 +230,7 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty }) {
                 <div style={{
                   position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
                   background: "var(--cream-50)", border: "1px solid var(--line)",
-                  borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+                  borderRadius: 10, boxShadow: "0 8px 24px var(--shadow-soft)",
                   minWidth: 170, overflow: "hidden",
                 }}>
                   {[
@@ -489,13 +489,13 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty }) {
       {newOpen && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 200,
-          background: "rgba(61,40,23,0.35)", backdropFilter: "blur(4px)",
+          background: "var(--overlay-scrim)", backdropFilter: "blur(4px)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }} onClick={() => setNewOpen(false)}>
           <div style={{
             background: "var(--cream-50)", borderRadius: 16,
             padding: "28px 32px", width: 400,
-            boxShadow: "0 24px 60px rgba(61,40,23,0.18)",
+            boxShadow: "0 24px 60px var(--shadow-modal)",
             display: "flex", flexDirection: "column", gap: 20,
           }} onClick={e => e.stopPropagation()}>
             <div>
@@ -554,13 +554,13 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty }) {
       {ruleFormOpen && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 200,
-          background: "rgba(61,40,23,0.35)", backdropFilter: "blur(4px)",
+          background: "var(--overlay-scrim)", backdropFilter: "blur(4px)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }} onClick={() => setRuleFormOpen(false)}>
           <div style={{
             background: "var(--cream-50)", borderRadius: 16,
             padding: "28px 32px", width: 440,
-            boxShadow: "0 24px 60px rgba(61,40,23,0.18)",
+            boxShadow: "0 24px 60px var(--shadow-modal)",
             display: "flex", flexDirection: "column", gap: 20,
           }} onClick={e => e.stopPropagation()}>
             <div>
@@ -675,7 +675,7 @@ function CatDetail({ cat, onBack }) {
               <div style={{
                 position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
                 background: "var(--cream-50)", border: "1px solid var(--line)",
-                borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+                borderRadius: 10, boxShadow: "0 8px 24px var(--shadow-soft)",
                 minWidth: 180, overflow: "hidden",
               }}>
                 {MONTHS_OPT.map(m => (
@@ -849,9 +849,9 @@ function CategoryEvolutionChart({ months, values, color }) {
         const y = padY + innerH - t * innerH;
         return (
           <g key={i}>
-            <line x1={padX} x2={width - padR} y1={y} y2={y} stroke="rgba(61,40,23,0.07)"/>
+            <line x1={padX} x2={width - padR} y1={y} y2={y} style={{ stroke: "var(--grid-line)" }}/>
             <text x={padX - 6} y={y + 4} textAnchor="end" fontSize="10"
-                  fontFamily="var(--font-mono)" fill="rgba(61,40,23,0.5)">
+                  fontFamily="var(--font-mono)" style={{ fill: "var(--ink-500)" }}>
               {Math.round(min + t * (max - min))} €
             </text>
           </g>
@@ -869,7 +869,7 @@ function CategoryEvolutionChart({ months, values, color }) {
       ))}
       {months.map((m, i) => (
         <text key={i} x={xs[i]} y={height - 6} textAnchor="middle" fontSize="10"
-              fontFamily="var(--font-ui)" fill="rgba(61,40,23,0.5)">{m}</text>
+              fontFamily="var(--font-ui)" style={{ fill: "var(--ink-500)" }}>{m}</text>
       ))}
     </svg>
   );
@@ -934,7 +934,7 @@ function CatEmpty({ cat, onBack }) {
               <div style={{
                 position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
                 background: "var(--cream-50)", border: "1px solid var(--line)",
-                borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+                borderRadius: 10, boxShadow: "0 8px 24px var(--shadow-soft)",
                 minWidth: 180, overflow: "hidden",
               }}>
                 {MONTHS_OPT.map(m => (
@@ -1071,7 +1071,7 @@ const CAT_STYLES = `
   /* MANAGE VIEW */
   .cm-main { padding: 22px 28px; display: flex; flex-direction: column; gap: 14px;
              height: 100%; overflow: hidden;
-             background: #efe7d6; color: var(--ink-800); font-size: 13px; }
+             background: var(--page-bg); color: var(--ink-800); font-size: 13px; }
   .cm-top { display: flex; align-items: flex-end; justify-content: space-between; }
   .cm-bread { font-size: 11px; color: var(--ink-500); letter-spacing: 0.06em; text-transform: uppercase; }
   .cm-bread strong { color: var(--ink-800); font-weight: 500; letter-spacing: 0; text-transform: none; }
@@ -1149,7 +1149,7 @@ const CAT_STYLES = `
   .cm-budget-input .num { font-family: var(--font-display); font-size: 28px;
                           color: var(--ink-900); line-height: 1; }
   .cm-budget-input .cur { font-family: var(--font-display); font-size: 18px; color: var(--ink-500); }
-  .cm-budget-bar { flex: 1; height: 6px; background: rgba(61,40,23,0.07);
+  .cm-budget-bar { flex: 1; height: 6px; background: var(--grid-line);
                    border-radius: 999px; position: relative; }
   .cm-budget-bar > .fill { height: 100%; background: var(--amber-500); border-radius: 999px; }
   .cm-budget-bar > .thumb { position: absolute; width: 16px; height: 16px; border-radius: 50%;
@@ -1182,7 +1182,7 @@ const CAT_STYLES = `
   /* DETAIL VIEW */
   .cd-main { padding: 22px 28px; display: flex; flex-direction: column; gap: 14px;
              height: 100%; overflow: auto;
-             background: #efe7d6; color: var(--ink-800); font-size: 13px; }
+             background: var(--page-bg); color: var(--ink-800); font-size: 13px; }
   .cd-bread { font-size: 11px; color: var(--ink-500); letter-spacing: 0.06em;
               text-transform: uppercase;
               display: flex; align-items: center; gap: 6px; }
@@ -1232,7 +1232,7 @@ const CAT_STYLES = `
                  font-size: 12.5px; margin-bottom: 6px; }
   .cd-bar-meta .pct { font-family: var(--font-mono); font-size: 11px; color: var(--ink-500); }
   .cd-bar-meta .amt { font-family: var(--font-mono); font-size: 12px; color: var(--ink-800); }
-  .cd-bar { height: 5px; background: rgba(61,40,23,0.06);
+  .cd-bar { height: 5px; background: var(--grid-line);
             border-radius: 999px; overflow: hidden; }
 
   .cd-merch-row { display: grid; grid-template-columns: 32px 1fr auto auto;
@@ -1260,7 +1260,7 @@ const CAT_STYLES = `
   /* EMPTY VIEW */
   .ce-main { padding: 22px 28px; display: flex; flex-direction: column; gap: 18px;
              height: 100%; overflow: auto;
-             background: #efe7d6; color: var(--ink-800); font-size: 13px; }
+             background: var(--page-bg); color: var(--ink-800); font-size: 13px; }
   .ce-bread { font-size: 11px; color: var(--ink-500); letter-spacing: 0.06em;
               text-transform: uppercase;
               display: flex; align-items: center; gap: 6px; }

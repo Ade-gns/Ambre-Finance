@@ -57,7 +57,7 @@ export function Sparkline({ data, width = 120, height = 32, color = "#b8693d", f
 }
 
 /* ───── Donut ───── */
-export function Donut({ data, size = 220, thickness = 28, gap = 0.012, centerLabel, centerValue, labelColor = "#5a4530", valueColor = "#3d2817" }) {
+export function Donut({ data, size = 220, thickness = 28, gap = 0.012, centerLabel, centerValue }) {
   const r = (size - thickness) / 2;
   const cx = size / 2, cy = size / 2;
   const total = data.reduce((s, d) => s + d.value, 0);
@@ -74,15 +74,16 @@ export function Donut({ data, size = 220, thickness = 28, gap = 0.012, centerLab
   });
   return (
     <svg width={size} height={size} style={{ display: "block" }}>
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(61,40,23,0.06)" strokeWidth={thickness}/>
+      <circle cx={cx} cy={cy} r={r} fill="none" style={{ stroke: "var(--grid-line)" }} strokeWidth={thickness}/>
       {arcs.map(a => (
         <path key={a.key} d={a.d} stroke={a.color} strokeWidth={thickness} fill="none" strokeLinecap="butt"/>
       ))}
       {centerValue && (
         <>
           <text x={cx} y={cy - 6} textAnchor="middle" fontFamily="var(--font-ui)" fontSize="11" letterSpacing="0.04em"
-                fill={labelColor} style={{ textTransform: "uppercase" }}>{centerLabel}</text>
-          <text x={cx} y={cy + 22} textAnchor="middle" fontFamily="var(--font-display)" fontSize="32" fill={valueColor}>{centerValue}</text>
+                style={{ fill: "var(--ink-600)", textTransform: "uppercase" }}>{centerLabel}</text>
+          <text x={cx} y={cy + 22} textAnchor="middle" fontFamily="var(--font-display)" fontSize="32"
+                style={{ fill: "var(--ink-900)" }}>{centerValue}</text>
         </>
       )}
     </svg>
@@ -90,7 +91,7 @@ export function Donut({ data, size = 220, thickness = 28, gap = 0.012, centerLab
 }
 
 /* ───── Area chart (single series) ───── */
-export function AreaChart({ data, width = 520, height = 180, color = "#b8693d", yTicks = 4, padX = 8, padY = 18, labelColor = "rgba(61,40,23,0.45)" }) {
+export function AreaChart({ data, width = 520, height = 180, color = "#b8693d", yTicks = 4, padX = 8, padY = 18 }) {
   const vals = data.map(d => d.v);
   const min = Math.min(...vals, 0);
   const max = Math.max(...vals);
@@ -118,8 +119,9 @@ export function AreaChart({ data, width = 520, height = 180, color = "#b8693d", 
         const v = min + t * rng;
         return (
           <g key={i}>
-            <line x1={padX + 36} x2={width - padX} y1={y} y2={y} stroke="rgba(61,40,23,0.07)" strokeWidth="1"/>
-            <text x={padX + 28} y={y + 4} textAnchor="end" fontSize="10" fontFamily="var(--font-mono)" fill={labelColor}>
+            <line x1={padX + 36} x2={width - padX} y1={y} y2={y} style={{ stroke: "var(--grid-line)" }} strokeWidth="1"/>
+            <text x={padX + 28} y={y + 4} textAnchor="end" fontSize="10" fontFamily="var(--font-mono)"
+                  style={{ fill: "var(--ink-500)" }}>
               {Math.round(v).toLocaleString("fr-FR")}
             </text>
           </g>
@@ -128,7 +130,8 @@ export function AreaChart({ data, width = 520, height = 180, color = "#b8693d", 
       <path d={area} fill={`url(#${gradId})`} />
       <path d={line} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
       {data.map((d, i) => (
-        <text key={i} x={xs[i]} y={height - 4} textAnchor="middle" fontSize="10" fontFamily="var(--font-ui)" fill={labelColor}>
+        <text key={i} x={xs[i]} y={height - 4} textAnchor="middle" fontSize="10" fontFamily="var(--font-ui)"
+              style={{ fill: "var(--ink-500)" }}>
           {d.l}
         </text>
       ))}
@@ -137,7 +140,7 @@ export function AreaChart({ data, width = 520, height = 180, color = "#b8693d", 
 }
 
 /* ───── Stacked area (multi-series) ───── */
-export function StackedArea({ series, labels, width = 600, height = 220, padX = 8, padY = 20, labelColor = "rgba(61,40,23,0.45)" }) {
+export function StackedArea({ series, labels, width = 600, height = 220, padX = 8, padY = 20 }) {
   const n = labels.length;
   const totals = Array(n).fill(0);
   series.forEach(s => s.values.forEach((v, i) => totals[i] += v));
@@ -175,8 +178,9 @@ export function StackedArea({ series, labels, width = 600, height = 220, padX = 
         const y = padY + innerH - t * innerH;
         return (
           <g key={i}>
-            <line x1={padX + 40} x2={width - padX} y1={y} y2={y} stroke="rgba(61,40,23,0.07)"/>
-            <text x={padX + 32} y={y + 4} textAnchor="end" fontSize="10" fontFamily="var(--font-mono)" fill={labelColor}>
+            <line x1={padX + 40} x2={width - padX} y1={y} y2={y} style={{ stroke: "var(--grid-line)" }}/>
+            <text x={padX + 32} y={y + 4} textAnchor="end" fontSize="10" fontFamily="var(--font-mono)"
+                  style={{ fill: "var(--ink-500)" }}>
               {Math.round(t * max).toLocaleString("fr-FR")}
             </text>
           </g>
@@ -189,27 +193,28 @@ export function StackedArea({ series, labels, width = 600, height = 220, padX = 
         </g>
       ))}
       {labels.map((l, i) => (
-        i % 2 === 0 && <text key={i} x={xs[i]} y={height - 4} textAnchor="middle" fontSize="10" fontFamily="var(--font-ui)" fill={labelColor}>{l}</text>
+        i % 2 === 0 && <text key={i} x={xs[i]} y={height - 4} textAnchor="middle" fontSize="10" fontFamily="var(--font-ui)"
+              style={{ fill: "var(--ink-500)" }}>{l}</text>
       ))}
     </svg>
   );
 }
 
 /* ───── Horizontal bar list ───── */
-export function HBarList({ items, max, width = 360, barHeight = 8, textColor = "#3d2817", labelColor = "#7a6750" }) {
+export function HBarList({ items, max, width = 360, barHeight = 8 }) {
   const m = max || Math.max(...items.map(i => i.value));
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, width }}>
       {items.map(it => (
         <div key={it.label}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: textColor }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink-900)" }}>
               <span className="amb-dot" style={{ background: it.color }}></span>
               {it.label}
             </span>
-            <span className="mono" style={{ fontSize: 12, color: labelColor }}>{fmtEUR(it.value, 0)}</span>
+            <span className="mono" style={{ fontSize: 12, color: "var(--ink-600)" }}>{fmtEUR(it.value, 0)}</span>
           </div>
-          <div style={{ height: barHeight, background: "rgba(61,40,23,0.07)", borderRadius: 999, overflow: "hidden" }}>
+          <div style={{ height: barHeight, background: "var(--grid-line)", borderRadius: 999, overflow: "hidden" }}>
             <div style={{ width: `${(it.value / m) * 100}%`, height: "100%", background: it.color, borderRadius: 999 }}/>
           </div>
         </div>
@@ -219,7 +224,7 @@ export function HBarList({ items, max, width = 360, barHeight = 8, textColor = "
 }
 
 /* ───── Paired bars (expense vs income) ───── */
-export function PairedBars({ data, width = 520, height = 180, expColor = "#b8693d", incColor = "#6b7a4f", padX = 8, padY = 20, labelColor = "rgba(61,40,23,0.45)" }) {
+export function PairedBars({ data, width = 520, height = 180, expColor = "#b8693d", incColor = "#6b7a4f", padX = 8, padY = 20 }) {
   const max = Math.max(...data.flatMap(d => [d.exp, d.inc])) * 1.05;
   const innerW = width - padX * 2 - 40;
   const innerH = height - padY * 2 - 14;
@@ -233,8 +238,9 @@ export function PairedBars({ data, width = 520, height = 180, expColor = "#b8693
         const y = padY + innerH - t * innerH;
         return (
           <g key={i}>
-            <line x1={padX + 40} x2={width - padX} y1={y} y2={y} stroke="rgba(61,40,23,0.07)"/>
-            <text x={padX + 32} y={y + 4} textAnchor="end" fontSize="10" fontFamily="var(--font-mono)" fill={labelColor}>
+            <line x1={padX + 40} x2={width - padX} y1={y} y2={y} style={{ stroke: "var(--grid-line)" }}/>
+            <text x={padX + 32} y={y + 4} textAnchor="end" fontSize="10" fontFamily="var(--font-mono)"
+                  style={{ fill: "var(--ink-500)" }}>
               {Math.round(t * max).toLocaleString("fr-FR")}
             </text>
           </g>
@@ -246,7 +252,8 @@ export function PairedBars({ data, width = 520, height = 180, expColor = "#b8693
           <g key={i}>
             <rect x={cx - barW - 2} y={yOf(d.inc)} width={barW} height={padY + innerH - yOf(d.inc)} rx="2" fill={incColor} fillOpacity="0.6"/>
             <rect x={cx + 2} y={yOf(d.exp)} width={barW} height={padY + innerH - yOf(d.exp)} rx="2" fill={expColor} fillOpacity="0.85"/>
-            <text x={cx} y={height - 4} textAnchor="middle" fontSize="10" fontFamily="var(--font-ui)" fill={labelColor}>{d.m}</text>
+            <text x={cx} y={height - 4} textAnchor="middle" fontSize="10" fontFamily="var(--font-ui)"
+                  style={{ fill: "var(--ink-500)" }}>{d.m}</text>
           </g>
         );
       })}
@@ -255,13 +262,13 @@ export function PairedBars({ data, width = 520, height = 180, expColor = "#b8693
 }
 
 /* ───── Ring Gauge ───── */
-export function RingGauge({ value, size = 120, thickness = 10, color = "#b8693d", track = "rgba(184,105,61,0.12)" }) {
+export function RingGauge({ value, size = 120, thickness = 10, color = "#b8693d" }) {
   const r = (size - thickness) / 2;
   const c = 2 * Math.PI * r;
   const v = Math.min(1, value);
   return (
     <svg width={size} height={size} style={{ display: "block", transform: "rotate(-90deg)" }}>
-      <circle cx={size/2} cy={size/2} r={r} stroke={track} strokeWidth={thickness} fill="none"/>
+      <circle cx={size/2} cy={size/2} r={r} style={{ stroke: "var(--amber-100)" }} strokeWidth={thickness} fill="none"/>
       <circle cx={size/2} cy={size/2} r={r} stroke={color} strokeWidth={thickness} fill="none"
               strokeDasharray={`${c * v} ${c}`} strokeLinecap="round"/>
     </svg>

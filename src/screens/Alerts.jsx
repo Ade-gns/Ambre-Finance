@@ -261,7 +261,7 @@ export default function Alerts() {
             <div style={{
               position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
               background: "var(--cream-50)", border: "1px solid var(--line)",
-              borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+              borderRadius: 10, boxShadow: "0 8px 24px var(--shadow-soft)",
               minWidth: 190, overflow: "hidden",
             }}>
               {CAT_LIST.map(c => (
@@ -286,7 +286,7 @@ export default function Alerts() {
             <div style={{
               position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
               background: "var(--cream-50)", border: "1px solid var(--line)",
-              borderRadius: 10, boxShadow: "0 8px 24px rgba(61,40,23,0.12)",
+              borderRadius: 10, boxShadow: "0 8px 24px var(--shadow-soft)",
               minWidth: 180, overflow: "hidden",
             }}>
               {MONTH_LIST.map(m => (
@@ -421,7 +421,7 @@ function EmptyAlerts({ filter, selCat, selMonth }) {
 const AH_STYLES = `
   .ah-main { padding: 22px 28px; display: flex; flex-direction: column; gap: 14px;
              height: 100%; overflow: hidden;
-             background: #efe7d6; color: var(--ink-800); font-size: 13px; }
+             background: var(--page-bg); color: var(--ink-800); font-size: 13px; }
   .ah-top { display: flex; align-items: flex-end; justify-content: space-between; }
   .ah-bread { font-size: 11px; color: var(--ink-500); letter-spacing: 0.06em; text-transform: uppercase; }
   .ah-bread strong { color: var(--ink-800); font-weight: 500; letter-spacing: 0; text-transform: none; }
