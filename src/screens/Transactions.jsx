@@ -55,50 +55,34 @@ function txCatStyle(cat) {
    Composant principal — décide quelle variante afficher
    ───────────────────────────────────────────────────────────────── */
 export default function Transactions() {
-  const [state, setState] = useState("default"); // default | detail | empty | bulk
+  const [selectedTx, setSelectedTx]     = useState(null);
+  const [bulkMode, setBulkMode]         = useState(false);
+  const [bulkSelected, setBulkSelected] = useState([]);
+
+  const openDetail  = tx  => { setSelectedTx(tx); setBulkMode(false); };
+  const closeDetail = ()  => setSelectedTx(null);
+  const openBulk    = ()  => { setBulkMode(true); setSelectedTx(null); setBulkSelected([]); };
+  const closeBulk   = ()  => { setBulkMode(false); setBulkSelected([]); };
+
+  const toggleBulk  = idx => setBulkSelected(prev =>
+    prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
+  );
+  const selectAll   = () => setBulkSelected(TX_LIST.map((_, i) => i));
+  const deselectAll = () => setBulkSelected([]);
 
   return (
     <>
-      <DemoStateSwitcher current={state} onChange={setState} />
       <style>{TX_STYLES}</style>
 
-      {state === "default" && <TxDefault onRowClick={() => setState("detail")}
-                                          onSelectMany={() => setState("bulk")} />}
-      {state === "detail"  && <TxDetail  onClose={() => setState("default")} />}
-      {state === "empty"   && <TxEmpty />}
-      {state === "bulk"    && <TxBulk    onClose={() => setState("default")} />}
+      {bulkMode ? (
+        <TxBulk onClose={closeBulk} selected={bulkSelected}
+                onToggle={toggleBulk} onSelectAll={selectAll} onDeselectAll={deselectAll}/>
+      ) : selectedTx ? (
+        <TxDetail t={selectedTx} onClose={closeDetail}/>
+      ) : (
+        <TxDefault onRowClick={openDetail} onSelectMany={openBulk}/>
+      )}
     </>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────────
-   Barre de switch (temporaire, pour visualiser les 4 états)
-   ───────────────────────────────────────────────────────────────── */
-function DemoStateSwitcher({ current, onChange }) {
-  const states = [
-    { key: "default", label: "1. Liste" },
-    { key: "detail",  label: "2. Détail" },
-    { key: "empty",   label: "3. Vide" },
-    { key: "bulk",    label: "4. Sélection" },
-  ];
-  return (
-    <div style={{
-      position: "fixed", top: 8, right: 16, zIndex: 100,
-      display: "flex", gap: 4, padding: 4,
-      background: "rgba(255,255,255,0.9)", backdropFilter: "blur(8px)",
-      border: "1px solid var(--line)", borderRadius: 8, fontSize: 11,
-    }}>
-      <span style={{ padding: "4px 8px", color: "var(--ink-500)",
-                     letterSpacing: "0.04em", textTransform: "uppercase" }}>Démo</span>
-      {states.map(s => (
-        <button key={s.key} onClick={() => onChange(s.key)} style={{
-          padding: "4px 10px", borderRadius: 5, fontSize: 11,
-          background: current === s.key ? "var(--amber-500)" : "transparent",
-          color: current === s.key ? "var(--cream-50)" : "var(--ink-700)",
-          border: "none", cursor: "pointer",
-        }}>{s.label}</button>
-      ))}
-    </div>
   );
 }
 
@@ -127,7 +111,9 @@ function TxHeader() {
   );
 }
 
-function TxFilterBar({ withChips = true, filter = "all", onChangeFilter = () => {}, counts = { all: 18, exp: 16, inc: 1, tr: 1 } }) {
+function TxFilterBar({ withChips = true, filter = "all", onChangeFilter = () => {},
+                       counts = { all: 18, exp: 16, inc: 1, tr: 1 },
+                       search = "", onSearch = () => {} }) {
   const segs = [
     { key: "all", label: "Tout",       n: counts.all },
     { key: "exp", label: "Dépenses",   n: counts.exp },
@@ -149,8 +135,13 @@ function TxFilterBar({ withChips = true, filter = "all", onChangeFilter = () => 
         <div style={{ flex: 1 }}/>
         <div className="tx-search">
           <IcSearch size={14}/>
-          <input placeholder="Rechercher un libellé, un montant…" readOnly value=""/>
-          <span className="tx-search-kbd">⌘F</span>
+          <input placeholder="Rechercher un libellé, un montant…"
+                 value={search} onChange={e => onSearch(e.target.value)}/>
+          {search && (
+            <span style={{ cursor: "pointer", color: "var(--ink-500)", fontSize: 14, lineHeight: 1 }}
+                  onClick={() => onSearch("")}>×</span>
+          )}
+          {!search && <span className="tx-search-kbd">⌘F</span>}
         </div>
         <button className="tx-btn"><IcCalendar size={14}/>Mai 2026 <IcChevDn size={12}/></button>
         <button className="tx-btn"><IcFilter size={14}/>Filtres <span className="tx-badge">3</span></button>
@@ -202,7 +193,7 @@ function TxSummary() {
   );
 }
 
-function TxRow({ t, selected, bulk, dense, onClick }) {
+function TxRow({ t, selected, bulk, dense, onClick, onCheckboxClick }) {
   const cat = txCatStyle(t.cat);
   return (
     <div className={"tx-row" +
@@ -210,7 +201,8 @@ function TxRow({ t, selected, bulk, dense, onClick }) {
                     (bulk ? " bulk" : "") +
                     (dense ? " dense" : "")}
          onClick={onClick}>
-      <span className="tx-cb"/>
+      <span className="tx-cb"
+            onClick={onCheckboxClick ? e => { e.stopPropagation(); onCheckboxClick(); } : undefined}/>
       <div className="tx-date">
         <span className="dow">{t.dow}</span>
         <span className="num">{t.d}</span>
@@ -263,20 +255,22 @@ function TxTableHead() {
    ───────────────────────────────────────────────────────────────── */
 function TxDefault({ onRowClick, onSelectMany }) {
   const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
 
-  // Calcul des compteurs : "exp" = dépenses (amt < 0 et cat != "epa"), "inc" = revenus (amt > 0), "tr" = transferts (cat == "epa")
   const allTxs = TX_LIST;
   const cExp = allTxs.filter(t => t.amt < 0 && t.cat !== "epa").length;
   const cInc = allTxs.filter(t => t.amt > 0).length;
   const cTr  = allTxs.filter(t => t.cat === "epa").length;
   const counts = { all: allTxs.length, exp: cExp, inc: cInc, tr: cTr };
 
-  const matchFilter = (t) => {
-    if (filter === "all") return true;
-    if (filter === "exp") return t.amt < 0 && t.cat !== "epa";
-    if (filter === "inc") return t.amt > 0;
-    if (filter === "tr")  return t.cat === "epa";
-    return true;
+  const matchFilter = t => {
+    const q = search.toLowerCase();
+    const matchSeg = filter === "all" ? true
+      : filter === "exp" ? t.amt < 0 && t.cat !== "epa"
+      : filter === "inc" ? t.amt > 0
+      : t.cat === "epa";
+    const matchSearch = !q || t.lbl.toLowerCase().includes(q) || t.sub.toLowerCase().includes(q);
+    return matchSeg && matchSearch;
   };
 
   const groups = [
@@ -285,10 +279,13 @@ function TxDefault({ onRowClick, onSelectMany }) {
     { label: "Semaine du 28 avr. · 28 avr. – 4 mai", sum: -456.90,  rows: TX_LIST.slice(13) },
   ];
 
+  const filteredTotal = allTxs.filter(matchFilter).length;
+
   return (
     <main className="tx-main">
       <TxHeader />
-      <TxFilterBar filter={filter} onChangeFilter={setFilter} counts={counts}/>
+      <TxFilterBar filter={filter} onChangeFilter={setFilter} counts={counts}
+                   search={search} onSearch={setSearch}/>
       <TxSummary />
 
       <div className="tx-table">
@@ -304,15 +301,23 @@ function TxDefault({ onRowClick, onSelectMany }) {
                   <span className="sum">{g.sum > 0 ? "+" : ""}{fmtEUR(g.sum, 2)}</span>
                 </div>
                 {filteredRows.map((t, i) => (
-                  <TxRow key={gi + "-" + i} t={t}
-                         onClick={i === 0 && gi === 0 ? onRowClick : undefined}/>
+                  <TxRow key={gi + "-" + i} t={t} onClick={() => onRowClick(t)}
+                         onCheckboxClick={onSelectMany}/>
                 ))}
               </div>
             );
           })}
+          {filteredTotal === 0 && (
+            <div style={{ padding: "40px 24px", textAlign: "center",
+                          color: "var(--ink-500)", fontSize: 13 }}>
+              Aucune transaction ne correspond à « {search} ».
+              <span style={{ color: "var(--amber-500)", cursor: "pointer", marginLeft: 8 }}
+                    onClick={() => setSearch("")}>Effacer</span>
+            </div>
+          )}
         </div>
         <div className="tx-pagination">
-          <span>Affichées {allTxs.filter(matchFilter).length} sur {allTxs.length} · <strong>page 1 sur 1</strong></span>
+          <span>Affichées <strong>{filteredTotal}</strong> sur {allTxs.length} · <strong>page 1 sur 1</strong></span>
           <div className="tx-pager">
             <button className="tx-btn" disabled>←</button>
             <button className="tx-btn active">1</button>
@@ -333,9 +338,22 @@ function TxDefault({ onRowClick, onSelectMany }) {
 /* ─────────────────────────────────────────────────────────────────
    Vue 2 — Liste + panneau de détail
    ───────────────────────────────────────────────────────────────── */
-function TxDetail({ onClose }) {
-  const tSel = TX_LIST[0];
-  const catSel = txCatStyle(tSel.cat);
+function TxDetail({ t: tSel, onClose }) {
+  const [catId, setCatId]             = useState(tSel.cat);
+  const [catPickerOpen, setCatPickerOpen] = useState(false);
+  const [deleteState, setDeleteState] = useState(false);
+  const catSel = txCatStyle(catId);
+
+  const allCats = [
+    { id: "alim", label: "Alimentation", color: "#b8693d" },
+    { id: "loy",  label: "Logement",     color: "#3d2817" },
+    { id: "tra",  label: "Transports",   color: "#6b7a4f" },
+    { id: "loi",  label: "Loisirs",      color: "#a85a48" },
+    { id: "san",  label: "Santé",        color: "#9d8b73" },
+    { id: "abo",  label: "Abonnements",  color: "#cd8459" },
+    { id: "inc",  label: "Revenus",      color: "#6b7a4f" },
+    { id: "epa",  label: "Épargne",      color: "#9d8b73" },
+  ];
 
   return (
     <div style={{
@@ -377,16 +395,18 @@ function TxDetail({ onClose }) {
         </button>
 
         <div>
-          <div className="tx-detail-h">Détail · 14/05/2026 · Mercredi</div>
-          <div className="tx-detail-amt">
-            <span className="cur">−€</span>52<span className="cents">,34</span>
+          <div className="tx-detail-h">Détail · {tSel.d} · {tSel.dow}</div>
+          <div className="tx-detail-amt" style={{ color: tSel.amt > 0 ? "var(--sage-500)" : "var(--rose-500)" }}>
+            <span className="cur">{tSel.amt > 0 ? "+€" : "−€"}</span>
+            {Math.abs(Math.floor(tSel.amt)).toLocaleString("fr-FR")}
+            <span className="cents">,{String(Math.abs(tSel.amt).toFixed(2)).split(".")[1]}</span>
           </div>
-          <div className="tx-detail-lbl">Carrefour Market</div>
-          <div className="tx-detail-sub">Rue Saint-Honoré · Paris · 14h28</div>
+          <div className="tx-detail-lbl">{tSel.lbl}</div>
+          <div className="tx-detail-sub">{tSel.sub}</div>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div className="tx-field editable">
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, position: "relative" }}>
+          <div className="tx-field editable" onClick={() => setCatPickerOpen(v => !v)}>
             <span className="lbl">Catégorie</span>
             <span className="val" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
               <span className="amb-dot" style={{ background: catSel.color }}/>
@@ -394,13 +414,29 @@ function TxDetail({ onClose }) {
               <IcChevDn size={12}/>
             </span>
           </div>
+          {catPickerOpen && (
+            <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10,
+                          background: "var(--cream-50)", border: "1px solid var(--amber-500)",
+                          borderRadius: 10, padding: 6, boxShadow: "0 4px 14px rgba(61,40,23,0.12)" }}>
+              {allCats.map(c => (
+                <div key={c.id} onClick={() => { setCatId(c.id); setCatPickerOpen(false); }}
+                     style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px",
+                              borderRadius: 7, cursor: "pointer", fontSize: 12,
+                              background: c.id === catId ? "var(--amber-100)" : "transparent",
+                              color: c.id === catId ? "var(--amber-500)" : "var(--ink-800)" }}>
+                  <span className="amb-dot" style={{ background: c.color }}/>
+                  {c.label}
+                </div>
+              ))}
+            </div>
+          )}
           <div className="tx-field">
             <span className="lbl">Compte</span>
-            <span className="val">Compte courant · BNP</span>
+            <span className="val">{tSel.acc}</span>
           </div>
           <div className="tx-field">
             <span className="lbl">Mode</span>
-            <span className="val">Carte bancaire</span>
+            <span className="val">{tSel.mode}</span>
           </div>
           <div className="tx-field">
             <span className="lbl">Référence</span>
@@ -478,12 +514,15 @@ function TxDetail({ onClose }) {
             Dupliquer
           </button>
           <span style={{ flex: 1 }}/>
-          <button className="tx-danger-btn">
+          <button className="tx-danger-btn"
+                  onClick={() => { if (deleteState) { onClose(); } else { setDeleteState(true); setTimeout(() => setDeleteState(false), 3000); } }}
+                  style={{ borderColor: deleteState ? "var(--rose-500)" : undefined,
+                           background: deleteState ? "rgba(168,90,72,0.08)" : undefined }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
             </svg>
-            Supprimer
+            {deleteState ? "Confirmer la suppression ?" : "Supprimer"}
           </button>
         </div>
       </aside>
@@ -551,8 +590,9 @@ function TxEmpty() {
 /* ─────────────────────────────────────────────────────────────────
    Vue 4 — Sélection multiple (bulk actions)
    ───────────────────────────────────────────────────────────────── */
-function TxBulk({ onClose }) {
-  const selectedIdxs = new Set([0, 1, 5, 6, 7]);
+function TxBulk({ onClose, selected, onToggle, onSelectAll, onDeselectAll }) {
+  const selCount = selected.length;
+  const selTotal = selected.reduce((s, i) => s + Math.abs(TX_LIST[i]?.amt || 0), 0);
 
   return (
     <main className="tx-main">
@@ -566,10 +606,16 @@ function TxBulk({ onClose }) {
                           borderRight: "1.5px solid white", borderBottom: "1.5px solid white",
                           transform: "rotate(45deg)" }}/>
           </span>
-          <span className="tx-bulk-count">5</span>
-          <span style={{ fontSize: 12, color: "var(--cream-300)" }}>transactions sélectionnées · 217,93 €</span>
+          <span className="tx-bulk-count">{selCount}</span>
+          <span style={{ fontSize: 12, color: "var(--cream-300)" }}>
+            transaction{selCount > 1 ? "s" : ""} sélectionnée{selCount > 1 ? "s" : ""} · {fmtEUR(selTotal, 2)}
+          </span>
         </span>
-        <span style={{ fontSize: 11, color: "var(--cream-300)" }}>Tout sélectionner (18) · Désélectionner</span>
+        <span style={{ fontSize: 11, color: "var(--cream-300)", cursor: "pointer" }}>
+          <span onClick={onSelectAll}>Tout sélectionner ({TX_LIST.length})</span>
+          {" · "}
+          <span onClick={onDeselectAll}>Désélectionner</span>
+        </span>
         <span className="tx-bulk-sep"/>
         <button className="tx-bulk-action amber">
           <IcTag size={13}/>Re-catégoriser… <IcChevDn size={11}/>
@@ -613,21 +659,21 @@ function TxBulk({ onClose }) {
             <span>Cette semaine · 12 – 14 mai</span>
             <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--amber-500)",
                           fontFamily: "var(--font-mono)" }}>
-              2 sélectionnées · −65,14 €
+              {selected.filter(i => i >= 0 && i <= 4).length} sélectionnées
             </span>
           </div>
           {TX_LIST.slice(0, 5).map((t, i) => (
-            <TxRow key={"a-" + i} t={t} bulk={selectedIdxs.has(i)}/>
+            <TxRow key={"a-" + i} t={t} bulk={selected.includes(i)} onClick={() => onToggle(i)}/>
           ))}
           <div className="tx-group-h">
             <span>Semaine du 5 mai · 5 – 11 mai</span>
             <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--amber-500)",
                           fontFamily: "var(--font-mono)" }}>
-              3 sélectionnées · −152,79 €
+              {selected.filter(i => i >= 5 && i <= 10).length} sélectionnées
             </span>
           </div>
           {TX_LIST.slice(5, 11).map((t, i) => (
-            <TxRow key={"b-" + i} t={t} bulk={selectedIdxs.has(i + 5)}/>
+            <TxRow key={"b-" + i} t={t} bulk={selected.includes(i + 5)} onClick={() => onToggle(i + 5)}/>
           ))}
         </div>
       </div>
@@ -718,14 +764,19 @@ const TX_STYLES = `
   .tx-row.selected { background: var(--amber-100); }
   .tx-row.selected::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0;
                               width: 2px; background: var(--amber-500); }
-  .tx-row.bulk { background: rgba(184,105,61,0.08); }
-  .tx-row.bulk .tx-cb { background: var(--amber-500); border-color: var(--amber-500); position: relative; }
-  .tx-row.bulk .tx-cb::after { content: ""; position: absolute; left: 3px; top: 0px;
-                                width: 4px; height: 8px;
+  .tx-row.bulk { background: var(--amber-100); }
+  .tx-row.bulk:hover { background: var(--amber-100); }
+  .tx-row.bulk::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+                          width: 2px; background: var(--amber-500); }
+  .tx-row.bulk .tx-cb { background: var(--amber-500); border-color: var(--amber-500);
+                         position: relative; }
+  .tx-row.bulk .tx-cb::after { content: ""; position: absolute; left: 3px; top: 1px;
+                                width: 4px; height: 7px;
                                 border: solid var(--cream-50); border-width: 0 1.5px 1.5px 0;
                                 transform: rotate(45deg); }
 
-  .tx-cb { width: 14px; height: 14px; border: 1.5px solid var(--line-strong); border-radius: 3.5px; }
+  .tx-cb { width: 14px; height: 14px; border: 1.5px solid var(--line-strong); border-radius: 3.5px;
+           cursor: pointer; flex-shrink: 0; }
 
   .tx-date { display: flex; flex-direction: column; line-height: 1.1; }
   .tx-date .dow { font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
