@@ -309,7 +309,7 @@ function TxDefault({ onRowClick, onSelectMany }) {
                 ))}
               </div>
             );
-          })
+          })}
         </div>
         <div className="tx-pagination">
           <span>Affichées {allTxs.filter(matchFilter).length} sur {allTxs.length} · <strong>page 1 sur 1</strong></span>

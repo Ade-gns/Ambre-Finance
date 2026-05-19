@@ -79,6 +79,12 @@ function SubHeader({ breadcrumb, title, actions }) {
 
 /* ─────────── 1. Général ─────────── */
 function SettingsGeneral() {
+  const [montantFmt, setMontantFmt]     = useState(1);
+  const [dateFmt, setDateFmt]           = useState(0);
+  const [premierJour, setPremierJour]   = useState(0);
+  const [verrouiller, setVerrouiller]   = useState(false);
+  const [lancer, setLancer]             = useState(false);
+
   return (
     <>
       <SubHeader
@@ -145,9 +151,9 @@ function SettingsGeneral() {
             <div className="stg-row-lbl">Format des montants</div>
             <div className="stg-row-ctrl">
               <div className="stg-segmented">
-                <button>1234.56 €</button>
-                <button className="active">1 234,56 €</button>
-                <button>1.234,56 €</button>
+                {["1234.56 €", "1 234,56 €", "1.234,56 €"].map((opt, i) => (
+                  <button key={opt} className={i === montantFmt ? "active" : ""} onClick={() => setMontantFmt(i)}>{opt}</button>
+                ))}
               </div>
             </div>
           </div>
@@ -155,9 +161,9 @@ function SettingsGeneral() {
             <div className="stg-row-lbl">Format de date</div>
             <div className="stg-row-ctrl">
               <div className="stg-segmented">
-                <button className="active">14/05/2026</button>
-                <button>14 mai 2026</button>
-                <button>2026-05-14</button>
+                {["14/05/2026", "14 mai 2026", "2026-05-14"].map((opt, i) => (
+                  <button key={opt} className={i === dateFmt ? "active" : ""} onClick={() => setDateFmt(i)}>{opt}</button>
+                ))}
               </div>
             </div>
           </div>
@@ -165,8 +171,9 @@ function SettingsGeneral() {
             <div className="stg-row-lbl">Premier jour de la semaine</div>
             <div className="stg-row-ctrl">
               <div className="stg-segmented">
-                <button className="active">Lundi</button>
-                <button>Dimanche</button>
+                {["Lundi", "Dimanche"].map((opt, i) => (
+                  <button key={opt} className={i === premierJour ? "active" : ""} onClick={() => setPremierJour(i)}>{opt}</button>
+                ))}
               </div>
             </div>
           </div>
@@ -193,14 +200,18 @@ function SettingsGeneral() {
               <div className="stg-row-lbl">Verrouiller au démarrage</div>
               <div className="stg-row-sub">Demande une phrase secrète à l'ouverture d'Ambre.</div>
             </div>
-            <div className="stg-row-ctrl"><span className="stg-tg off"/></div>
+            <div className="stg-row-ctrl">
+              <span className={"stg-tg" + (verrouiller ? "" : " off")} onClick={() => setVerrouiller(v => !v)}/>
+            </div>
           </div>
           <div className="stg-row">
             <div>
               <div className="stg-row-lbl">Lancer Ambre au démarrage du système</div>
               <div className="stg-row-sub">Démarre minimisé dans la barre de tâches.</div>
             </div>
-            <div className="stg-row-ctrl"><span className="stg-tg off"/></div>
+            <div className="stg-row-ctrl">
+              <span className={"stg-tg" + (lancer ? "" : " off")} onClick={() => setLancer(v => !v)}/>
+            </div>
           </div>
         </div>
       </div>
@@ -210,12 +221,20 @@ function SettingsGeneral() {
 
 /* ─────────── 2. Comptes & banques ─────────── */
 function SettingsAccounts() {
-  const accounts = [
-    { id: 1, name: "Compte courant", bank: "BNP Paribas",       type: "Courant",       color: "#b8693d", bal: 3284.40,  last: "12 mai",   tx: 142, parser: "PDF + CSV", on: true },
-    { id: 2, name: "Livret A",       bank: "La Banque Postale", type: "Épargne",       color: "#6b7a4f", bal: 8120.00,  last: "08 avril", tx: 24,  parser: "CSV",        on: true },
-    { id: 3, name: "PEA",            bank: "Boursorama",         type: "Investissement", color: "#3d2817", bal: 12450.78, last: "01 mars",  tx: 18,  parser: "OFX",        on: true },
+  const FILTERS = ["Tous", "Courant", "Épargne", "Investissement"];
+  const [filter, setFilter] = useState("Tous");
+  const [accounts, setAccounts] = useState([
+    { id: 1, name: "Compte courant", bank: "BNP Paribas",       type: "Courant",        color: "#b8693d", bal: 3284.40,  last: "12 mai",   tx: 142, parser: "PDF + CSV", on: true },
+    { id: 2, name: "Livret A",       bank: "La Banque Postale", type: "Épargne",        color: "#6b7a4f", bal: 8120.00,  last: "08 avril", tx: 24,  parser: "CSV",        on: true },
+    { id: 3, name: "PEA",            bank: "Boursorama",        type: "Investissement", color: "#3d2817", bal: 12450.78, last: "01 mars",  tx: 18,  parser: "OFX",        on: true },
     { id: 4, name: "Carte Revolut",  bank: "Revolut",           type: "E-money",        color: "#9d8b73", bal: 142.30,   last: "30 avril", tx: 31,  parser: "CSV",        on: false },
-  ];
+  ]);
+
+  const toggleAccount = id => setAccounts(prev =>
+    prev.map(a => a.id === id ? { ...a, on: !a.on } : a)
+  );
+
+  const visible = filter === "Tous" ? accounts : accounts.filter(a => a.type === filter);
 
   return (
     <>
@@ -235,14 +254,13 @@ function SettingsAccounts() {
             </div>
           </div>
           <div className="stg-segmented">
-            <button className="active">Tous</button>
-            <button>Courants</button>
-            <button>Épargne</button>
-            <button>Investissement</button>
+            {FILTERS.map(f => (
+              <button key={f} className={f === filter ? "active" : ""} onClick={() => setFilter(f)}>{f}</button>
+            ))}
           </div>
         </div>
         <div>
-          {accounts.map(a => (
+          {visible.map(a => (
             <div key={a.id} style={{
               display: "grid",
               gridTemplateColumns: "44px 1.4fr 1fr 130px 100px 32px 28px 28px",
@@ -275,7 +293,7 @@ function SettingsAccounts() {
                 background: "var(--cream-200)", color: "var(--ink-700)",
                 fontFamily: "var(--font-mono)", justifySelf: "start"
               }}>{a.parser}</span>
-              <span className={"stg-tg" + (a.on ? "" : " off")}/>
+              <span className={"stg-tg" + (a.on ? "" : " off")} onClick={() => toggleAccount(a.id)}/>
               <button className="stg-btn" style={{ padding: 0, width: 28, height: 28, justifyContent: "center" }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -340,20 +358,31 @@ function SettingsCategoriesRedirect() {
 
 /* ─────────── 4. Alertes ─────────── */
 function SettingsAlerts() {
-  const alerts = [
+  const [channels, setChannels] = useState({ systeme: true, os: true, offline: false });
+  const [alertFilter, setAlertFilter] = useState("Toutes");
+  const [alerts, setAlerts] = useState([
     { id: 1, name: "Loyer encaissé",            cond: "Réception d'un virement contenant « salaire »",   thr: "✓ détection",   now: "12 mai",   state: "ok",   on: true,  color: "#6b7a4f" },
     { id: 2, name: "Budget Loisirs proche",     cond: "Dépenses Loisirs ≥ 85 % du budget mensuel",        thr: "85 / 100 €",    now: "96,80 €",  state: "warn", on: true,  color: "#a85a48" },
     { id: 3, name: "Budget Alimentation",       cond: "Dépenses Alimentation ≥ 90 % du budget mensuel",   thr: "450 / 500 €",   now: "487 €",    state: "warn", on: true,  color: "#b8693d" },
     { id: 4, name: "Transaction inhabituelle",  cond: "Dépense > 200 € en dehors des récurrentes",        thr: "200 €",         now: "—",        state: "ok",   on: true,  color: "#9d8b73" },
     { id: 5, name: "Solde courant bas",         cond: "Solde courant < 500 €",                            thr: "500 €",         now: "3 284 €",  state: "ok",   on: false, color: "#3d2817" },
     { id: 6, name: "Abonnement nouveau",        cond: "Nouvelle transaction récurrente détectée",         thr: "— auto —",      now: "—",        state: "ok",   on: true,  color: "#cd8459" },
-  ];
+  ]);
   const templates = [
     { name: "Plafond mensuel global",   desc: "Quand le total dépensé dépasse X €",          ico: "€" },
     { name: "Sans dépense en 7 jours",  desc: "Une catégorie n'a aucune transaction sur 7 j", ico: "○" },
     { name: "Augmentation > 30 %",      desc: "Une catégorie augmente fortement vs M−1",      ico: "↑" },
     { name: "Doublon potentiel",        desc: "Deux transactions identiques en 48h",          ico: "≈" },
   ];
+
+  const toggleAlert = id => setAlerts(prev =>
+    prev.map(a => a.id === id ? { ...a, on: !a.on } : a)
+  );
+
+  const ALERT_FILTERS = ["Toutes", "Seuils", "Anomalies"];
+  const visible = alertFilter === "Toutes" ? alerts
+    : alertFilter === "Seuils" ? alerts.filter(a => a.thr !== "✓ détection" && a.thr !== "— auto —")
+    : alerts.filter(a => a.state === "warn");
 
   return (
     <>
@@ -371,9 +400,10 @@ function SettingsAlerts() {
         <div className="stg-channel">
           <div className="stg-channel-h"><IcBell size={12}/>Notification système</div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
-            <span className="stg-tg-mini"/>
+            <span className={"stg-tg-mini" + (channels.systeme ? "" : " off")}
+                  onClick={() => setChannels(c => ({ ...c, systeme: !c.systeme }))}/>
             <div>
-              <div className="stg-channel-l">Activée</div>
+              <div className="stg-channel-l">{channels.systeme ? "Activée" : "Désactivée"}</div>
               <div className="stg-channel-d">Une bulle apparaît dans Ambre</div>
             </div>
           </div>
@@ -381,9 +411,10 @@ function SettingsAlerts() {
         <div className="stg-channel">
           <div className="stg-channel-h"><IcSun size={12}/>Notification OS</div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
-            <span className="stg-tg-mini"/>
+            <span className={"stg-tg-mini" + (channels.os ? "" : " off")}
+                  onClick={() => setChannels(c => ({ ...c, os: !c.os }))}/>
             <div>
-              <div className="stg-channel-l">Bureau Linux</div>
+              <div className="stg-channel-l">{channels.os ? "Bureau Linux" : "Désactivée"}</div>
               <div className="stg-channel-d">via libnotify · son désactivé</div>
             </div>
           </div>
@@ -391,7 +422,8 @@ function SettingsAlerts() {
         <div className="stg-channel">
           <div className="stg-channel-h"><IcLock size={12}/>Hors-ligne uniquement</div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
-            <span className="stg-tg-mini off"/>
+            <span className={"stg-tg-mini" + (channels.offline ? "" : " off")}
+                  onClick={() => setChannels(c => ({ ...c, offline: !c.offline }))}/>
             <div>
               <div className="stg-channel-l">Aucun e-mail / SMS</div>
               <div className="stg-channel-d">Cette app n'envoie jamais rien en ligne.</div>
@@ -408,14 +440,17 @@ function SettingsAlerts() {
             <div className="stg-card-s">déclenchées à chaque import ou modification de transaction</div>
           </div>
           <div style={{ display: "flex", gap: 6 }}>
-            <button className="stg-btn" style={{ padding: "4px 10px", fontSize: 11,
-                     background: "var(--amber-100)", color: "var(--amber-500)",
-                     borderColor: "rgba(184,105,61,0.3)" }}>Toutes</button>
-            <button className="stg-btn" style={{ padding: "4px 10px", fontSize: 11 }}>Seuils</button>
-            <button className="stg-btn" style={{ padding: "4px 10px", fontSize: 11 }}>Anomalies</button>
+            {ALERT_FILTERS.map(f => (
+              <button key={f} className="stg-btn" onClick={() => setAlertFilter(f)} style={{
+                padding: "4px 10px", fontSize: 11,
+                background: f === alertFilter ? "var(--amber-100)" : undefined,
+                color:      f === alertFilter ? "var(--amber-500)" : undefined,
+                borderColor: f === alertFilter ? "rgba(184,105,61,0.3)" : undefined,
+              }}>{f}</button>
+            ))}
           </div>
         </div>
-        {alerts.map(a => (
+        {visible.map(a => (
           <div key={a.id} className="stg-alert">
             <div className="stg-alert-ico" style={{ background: a.color }}>
               <IcBell size={16}/>
@@ -429,7 +464,7 @@ function SettingsAlerts() {
               {a.state === "warn" ? "⚠ " : "○ "}
               {a.now}
             </span>
-            <span className={"stg-tg" + (a.on ? "" : " off")}/>
+            <span className={"stg-tg" + (a.on ? "" : " off")} onClick={() => toggleAlert(a.id)}/>
             <button className="stg-btn" style={{ padding: 0, width: 28, height: 28, justifyContent: "center" }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -478,6 +513,10 @@ function SettingsAlerts() {
 
 /* ─────────── 5. Sauvegarde & données ─────────── */
 function SettingsBackup() {
+  const FREQ = ["Manuelle", "Quotidienne", "Hebdomadaire", "Mensuelle"];
+  const [backupOn, setBackupOn] = useState(false);
+  const [freq, setFreq]         = useState(2);
+
   return (
     <>
       <SubHeader
@@ -558,16 +597,17 @@ function SettingsBackup() {
         <div>
           <div className="stg-row">
             <div className="stg-row-lbl">Activer les sauvegardes auto.</div>
-            <div className="stg-row-ctrl"><span className="stg-tg"/></div>
+            <div className="stg-row-ctrl">
+              <span className={"stg-tg" + (backupOn ? "" : " off")} onClick={() => setBackupOn(v => !v)}/>
+            </div>
           </div>
-          <div className="stg-row">
+          <div className="stg-row" style={{ opacity: backupOn ? 1 : 0.4, pointerEvents: backupOn ? "auto" : "none" }}>
             <div className="stg-row-lbl">Fréquence</div>
             <div className="stg-row-ctrl">
               <div className="stg-segmented">
-                <button>Manuelle</button>
-                <button>Quotidienne</button>
-                <button className="active">Hebdomadaire</button>
-                <button>Mensuelle</button>
+                {FREQ.map((f, i) => (
+                  <button key={f} className={i === freq ? "active" : ""} onClick={() => setFreq(i)}>{f}</button>
+                ))}
               </div>
             </div>
           </div>
@@ -641,6 +681,27 @@ function SettingsBackup() {
 
 /* ─────────── 6. Apparence ─────────── */
 function SettingsAppearance() {
+  const THEMES  = [
+    { id: "clair",  label: "Clair",   bg: "#faf6ef", panel: "#f6f1ea" },
+    { id: "sombre", label: "Sombre",  bg: "#14110d", panel: "#1c1814" },
+    { id: "auto",   label: "Système", bg: "linear-gradient(135deg, #faf6ef 50%, #14110d 50%)", panel: "#f6f1ea" },
+  ];
+  const ACCENTS = [
+    { c: "#b8693d", l: "Ambre" },
+    { c: "#a85a48", l: "Terracotta" },
+    { c: "#6b7a4f", l: "Sauge" },
+    { c: "#7a5c3a", l: "Bronze" },
+    { c: "#3d2817", l: "Ink" },
+  ];
+  const TAILLES  = ["Compacte", "Normale", "Agréable"];
+  const DENSITES = ["Compacte", "Confortable", "Spacieuse"];
+
+  const [theme,   setTheme]   = useState("clair");
+  const [accent,  setAccent]  = useState("Ambre");
+  const [taille,  setTaille]  = useState(1);
+  const [densite, setDensite] = useState(1);
+  const [reduire, setReduire] = useState(false);
+
   return (
     <>
       <SubHeader
@@ -655,38 +716,37 @@ function SettingsAppearance() {
           <div className="stg-card-s">Sombre ou clair, ou suit votre système.</div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-          {[
-            { id: "clair",  label: "Clair",   bg: "#faf6ef", panel: "#f6f1ea", active: true },
-            { id: "sombre", label: "Sombre",  bg: "#14110d", panel: "#1c1814" },
-            { id: "auto",   label: "Système", bg: "linear-gradient(135deg, #faf6ef 50%, #14110d 50%)", panel: "#f6f1ea" },
-          ].map(t => (
-            <div key={t.id} style={{
-              position: "relative",
-              border: t.active ? "2px solid var(--amber-500)" : "1px solid var(--line)",
-              borderRadius: 12, padding: 0, overflow: "hidden", cursor: "pointer"
-            }}>
-              <div style={{ height: 100, background: t.bg, padding: 12,
-                            display: "flex", flexDirection: "column", gap: 6 }}>
-                <div style={{ height: 18, background: t.panel, borderRadius: 4, width: "40%" }}/>
-                <div style={{ display: "flex", gap: 4 }}>
-                  <div style={{ height: 28, flex: 1, background: t.panel, borderRadius: 4 }}/>
-                  <div style={{ height: 28, flex: 1, background: t.panel, borderRadius: 4 }}/>
+          {THEMES.map(t => {
+            const active = t.id === theme;
+            return (
+              <div key={t.id} onClick={() => setTheme(t.id)} style={{
+                position: "relative", cursor: "pointer",
+                border: active ? "2px solid var(--amber-500)" : "1px solid var(--line)",
+                borderRadius: 12, overflow: "hidden",
+              }}>
+                <div style={{ height: 100, background: t.bg, padding: 12,
+                              display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ height: 18, background: t.panel, borderRadius: 4, width: "40%" }}/>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <div style={{ height: 28, flex: 1, background: t.panel, borderRadius: 4 }}/>
+                    <div style={{ height: 28, flex: 1, background: t.panel, borderRadius: 4 }}/>
+                  </div>
+                  <div style={{ height: 22, background: t.panel, borderRadius: 4 }}/>
                 </div>
-                <div style={{ height: 22, background: t.panel, borderRadius: 4 }}/>
+                <div style={{ padding: "10px 14px", background: "var(--cream-50)",
+                              display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 13, color: "var(--ink-900)", fontWeight: 500 }}>{t.label}</span>
+                  {active && (
+                    <span style={{
+                      width: 14, height: 14, borderRadius: 999,
+                      background: "var(--amber-500)", color: "var(--cream-50)",
+                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9
+                    }}>✓</span>
+                  )}
+                </div>
               </div>
-              <div style={{ padding: "10px 14px", background: "var(--cream-50)",
-                            display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 13, color: "var(--ink-900)", fontWeight: 500 }}>{t.label}</span>
-                {t.active && (
-                  <span style={{
-                    width: 14, height: 14, borderRadius: 999,
-                    background: "var(--amber-500)", color: "var(--cream-50)",
-                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9
-                  }}>✓</span>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -696,23 +756,20 @@ function SettingsAppearance() {
           <div className="stg-card-s">Utilisée sur les CTA, les graphiques principaux et la sélection.</div>
         </div>
         <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
-          {[
-            { c: "#b8693d", l: "Ambre", active: true },
-            { c: "#a85a48", l: "Terracotta" },
-            { c: "#6b7a4f", l: "Sauge" },
-            { c: "#7a5c3a", l: "Bronze" },
-            { c: "#3d2817", l: "Ink" },
-          ].map(s => (
-            <div key={s.l} style={{ display: "flex", flexDirection: "column",
-                                    alignItems: "center", gap: 6, cursor: "pointer" }}>
-              <div style={{
-                width: 42, height: 42, borderRadius: 12, background: s.c,
-                border: s.active ? "3px solid var(--ink-800)" : "3px solid transparent",
-                boxShadow: s.active ? "0 0 0 2px var(--cream-50) inset" : "none"
-              }}/>
-              <span style={{ fontSize: 11, color: "var(--ink-700)" }}>{s.l}</span>
-            </div>
-          ))}
+          {ACCENTS.map(s => {
+            const active = s.l === accent;
+            return (
+              <div key={s.l} onClick={() => setAccent(s.l)}
+                   style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                <div style={{
+                  width: 42, height: 42, borderRadius: 12, background: s.c,
+                  border: active ? "3px solid var(--ink-800)" : "3px solid transparent",
+                  boxShadow: active ? "0 0 0 2px var(--cream-50) inset" : "none"
+                }}/>
+                <span style={{ fontSize: 11, color: active ? "var(--ink-900)" : "var(--ink-700)", fontWeight: active ? 500 : 400 }}>{s.l}</span>
+              </div>
+            );
+          })}
           <div style={{
             width: 42, height: 42, borderRadius: 12,
             border: "2px dashed var(--line-strong)",
@@ -754,9 +811,9 @@ function SettingsAppearance() {
             <div className="stg-row-lbl">Taille générale</div>
             <div className="stg-row-ctrl">
               <div className="stg-segmented">
-                <button>Compacte</button>
-                <button className="active">Normale</button>
-                <button>Agréable</button>
+                {TAILLES.map((opt, i) => (
+                  <button key={opt} className={i === taille ? "active" : ""} onClick={() => setTaille(i)}>{opt}</button>
+                ))}
               </div>
             </div>
           </div>
@@ -764,9 +821,9 @@ function SettingsAppearance() {
             <div className="stg-row-lbl">Densité des tableaux</div>
             <div className="stg-row-ctrl">
               <div className="stg-segmented">
-                <button>Compacte</button>
-                <button className="active">Confortable</button>
-                <button>Spacieuse</button>
+                {DENSITES.map((opt, i) => (
+                  <button key={opt} className={i === densite ? "active" : ""} onClick={() => setDensite(i)}>{opt}</button>
+                ))}
               </div>
             </div>
           </div>
@@ -775,7 +832,9 @@ function SettingsAppearance() {
               <div className="stg-row-lbl">Réduire les animations</div>
               <div className="stg-row-sub">Désactive les transitions des graphiques.</div>
             </div>
-            <div className="stg-row-ctrl"><span className="stg-tg off"/></div>
+            <div className="stg-row-ctrl">
+              <span className={"stg-tg" + (reduire ? "" : " off")} onClick={() => setReduire(v => !v)}/>
+            </div>
           </div>
         </div>
       </div>
