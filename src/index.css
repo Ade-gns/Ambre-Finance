@@ -1,0 +1,14 @@
+/* Imports des polices via Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* Design tokens Ambre */
+@import './styles/tokens.css';
+
+/* Reset spécifique app — overflow géré au niveau App.jsx, pas body */
+html, body { background: var(--cream-200); }
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
