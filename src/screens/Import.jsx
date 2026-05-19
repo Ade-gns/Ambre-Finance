@@ -1,13 +1,10 @@
 /* Écran Import — workflow complet en 4 états
    1. empty   — drop zone + historique + sources
-   2. preview — table éditable des transactions extraites
+   2. preview — table des transactions extraites (données réelles)
    3. success — confirmation et prochaines étapes
-   4. error   — erreur de lecture + cas fréquents
+   4. error   — erreur de lecture + cas fréquents */
 
-   Pour le moment, le passage d'un état à l'autre se fait via des boutons (mocks).
-   Plus tard, les vraies transitions seront déclenchées par le backend Tauri/Rust. */
-
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { CATEGORIES } from "../data/mockData";
 import { fmtEUR } from "../lib/chartPrimitives";
 import {
@@ -15,71 +12,148 @@ import {
   IcPlus, IcHome, IcList, IcImport, IcTag, IcBell
 } from "../lib/icons";
 
-export default function Import() {
-  const [state, setState] = useState("empty"); // empty | preview | success | error
+/* ─────────────────────────────────────────────────────────────────
+   Parser CSV générique (séparateur ; ou ,  — gère les champs quotés)
+   ───────────────────────────────────────────────────────────────── */
+function parseCsvRow(row, sep) {
+  const cells = [];
+  let field = "";
+  let inQ = false;
+  for (let i = 0; i < row.length; i++) {
+    const ch = row[i];
+    if (ch === '"') { inQ = !inQ; }
+    else if (ch === sep && !inQ) { cells.push(field.trim()); field = ""; }
+    else { field += ch; }
+  }
+  cells.push(field.trim());
+  return cells;
+}
 
-  return (
-    <>
-      {/* Barre de contrôle "demo" — visible en haut, permet de tester les 4 états.
-          À retirer quand le vrai workflow sera branché sur le backend. */}
-      <DemoStateSwitcher current={state} onChange={setState} />
+function normalizeDate(raw) {
+  let d = raw.replace(/-/g, "/").trim();
+  if (/^\d{4}\/\d{2}\/\d{2}$/.test(d)) d = d.slice(8) + "/" + d.slice(5, 7);
+  else if (/^\d{2}\/\d{2}\/\d{4}$/.test(d)) d = d.slice(0, 5);
+  else if (/^\d{2}\/\d{2}\/\d{2}$/.test(d)) d = d.slice(0, 5);
+  return d;
+}
 
-      {state === "empty"   && <ImportEmpty   onPick={() => setState("preview")}
-                                              onError={() => setState("error")} />}
-      {state === "preview" && <ImportPreview onConfirm={() => setState("success")}
-                                              onCancel={() => setState("empty")} />}
-      {state === "success" && <ImportSuccess onAgain={() => setState("empty")} />}
-      {state === "error"   && <ImportError   onRetry={() => setState("empty")} />}
-    </>
-  );
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return null;
+  const sep = (text.match(/;/g) || []).length > (text.match(/,/g) || []).length ? ";" : ",";
+  const normalize = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const header = parseCsvRow(lines[0], sep).map(c => normalize(c.replace(/"/g, "")));
+
+  const idx = (keywords) => header.findIndex(c => keywords.some(k => c.includes(k)));
+  const dateIdx = idx(["date", "jour"]);
+  const lblIdx  = idx(["libel", "descri", "label", "operation", "intitule"]);
+  const amtIdx  = idx(["montant", "amount", "somme"]);
+  const debIdx  = idx(["debit"]);
+  const credIdx = idx(["credit"]);
+  const subIdx  = idx(["detail", "info", "complement", "categorie", "reference"]);
+
+  if (dateIdx === -1 && lblIdx === -1) return null;
+
+  const eDateIdx = dateIdx !== -1 ? dateIdx : 0;
+  const eLblIdx  = lblIdx  !== -1 ? lblIdx  : 1;
+
+  const txs = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cells = parseCsvRow(lines[i], sep);
+    if (cells.length < 2) continue;
+
+    let amt = 0;
+    if (amtIdx !== -1) {
+      const raw = (cells[amtIdx] || "").replace(/\s/g, "").replace(",", ".").replace(/[^0-9.\-+]/g, "");
+      amt = parseFloat(raw) || 0;
+    } else if (debIdx !== -1 || credIdx !== -1) {
+      const deb  = debIdx  !== -1 ? parseFloat((cells[debIdx]  || "").replace(",", ".").replace(/[^0-9.]/g, "")) || 0 : 0;
+      const cred = credIdx !== -1 ? parseFloat((cells[credIdx] || "").replace(",", ".").replace(/[^0-9.]/g, "")) || 0 : 0;
+      amt = cred > 0 ? cred : -deb;
+    }
+    if (isNaN(amt) || amt === 0) continue;
+
+    txs.push({
+      d:    normalizeDate(cells[eDateIdx] || ""),
+      lbl:  (cells[eLblIdx] || "—").replace(/"/g, ""),
+      sub:  subIdx !== -1 ? (cells[subIdx] || "").replace(/"/g, "") : "",
+      cat:  null,
+      conf: "none",
+      amt,
+    });
+  }
+  return txs.length > 0 ? txs : null;
+}
+
+function fmtSize(bytes) {
+  if (bytes < 1024) return bytes + " o";
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " ko";
+  return (bytes / (1024 * 1024)).toFixed(1) + " Mo";
 }
 
 /* ─────────────────────────────────────────────────────────────────
-   Barre de switch entre les 4 états (mode démo)
+   Composant principal
    ───────────────────────────────────────────────────────────────── */
-function DemoStateSwitcher({ current, onChange }) {
-  const states = [
-    { key: "empty",   label: "1. Vide" },
-    { key: "preview", label: "2. Aperçu" },
-    { key: "success", label: "3. Succès" },
-    { key: "error",   label: "4. Erreur" },
-  ];
+export default function Import() {
+  const [state, setState]       = useState("empty");
+  const [parsedTxs, setParsedTxs] = useState(null);
+  const [fileName, setFileName] = useState("");
+  const [fileSize, setFileSize] = useState(0);
+  const [parseError, setParseError] = useState("");
+
+  const handleFile = file => {
+    if (!file) return;
+    setFileName(file.name);
+    setFileSize(file.size);
+    const ext = file.name.split(".").pop().toLowerCase();
+
+    if (ext === "csv" || ext === "txt") {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const txs = parseCSV(e.target.result);
+        if (txs && txs.length > 0) {
+          setParsedTxs(txs);
+          setState("preview");
+        } else {
+          setParseError("Format CSV non reconnu ou fichier vide. Vérifiez que le fichier contient une ligne d'en-tête avec les colonnes Date, Libellé et Montant.");
+          setState("error");
+        }
+      };
+      reader.onerror = () => {
+        setParseError("Impossible de lire le fichier.");
+        setState("error");
+      };
+      reader.readAsText(file, "UTF-8");
+    } else if (ext === "pdf" || ext === "ofx" || ext === "qif") {
+      setParseError(`La lecture des fichiers .${ext} nécessite le moteur Rust (en développement). Exportez un CSV depuis votre espace bancaire en attendant.`);
+      setState("error");
+    } else {
+      setParseError(`Format .${ext} non pris en charge. Formats acceptés : CSV, PDF, OFX, QIF.`);
+      setState("error");
+    }
+  };
+
   return (
-    <div style={{
-      position: "fixed", top: 8, right: 16, zIndex: 100,
-      display: "flex", gap: 4,
-      padding: 4,
-      background: "rgba(255,255,255,0.9)",
-      backdropFilter: "blur(8px)",
-      border: "1px solid var(--line)",
-      borderRadius: 8,
-      fontSize: 11,
-    }}>
-      <span style={{ padding: "4px 8px", color: "var(--ink-500)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
-        Démo
-      </span>
-      {states.map(s => (
-        <button key={s.key} onClick={() => onChange(s.key)}
-                style={{
-                  padding: "4px 10px",
-                  borderRadius: 5,
-                  fontSize: 11,
-                  background: current === s.key ? "var(--amber-500)" : "transparent",
-                  color: current === s.key ? "var(--cream-50)" : "var(--ink-700)",
-                  border: "none",
-                  cursor: "pointer",
-                }}>
-          {s.label}
-        </button>
-      ))}
-    </div>
+    <>
+      {state === "empty"   && <ImportEmpty   onFile={handleFile} />}
+      {state === "preview" && <ImportPreview txs={parsedTxs} fileName={fileName} fileSize={fileSize}
+                                              onConfirm={() => setState("success")}
+                                              onCancel={() => setState("empty")} />}
+      {state === "success" && <ImportSuccess  txs={parsedTxs} fileName={fileName}
+                                              onAgain={() => setState("empty")} />}
+      {state === "error"   && <ImportError    onRetry={() => setState("empty")}
+                                              errorMsg={parseError} fileName={fileName} />}
+    </>
   );
 }
 
 /* ─────────────────────────────────────────────────────────────────
    1. État vide — drop zone + historique + sources reconnues
    ───────────────────────────────────────────────────────────────── */
-function ImportEmpty({ onPick, onError }) {
+function ImportEmpty({ onFile }) {
+  const fileRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
+
   const sources = [
     { name: "BNP Paribas",            fmt: "PDF, CSV", last: "Avril 2026", status: "ok" },
     { name: "La Banque Postale",      fmt: "PDF, CSV", last: "Mars 2026",  status: "ok" },
@@ -95,6 +169,13 @@ function ImportEmpty({ onPick, onError }) {
     { file: "releve-bnp-mars-2026.pdf",  date: "06 avril · 22h04", tx: 39, period: "01 – 31 mars",    size: "291 ko" },
     { file: "lbp-fevrier-2026.csv",      date: "08 mars · 18h44",  tx: 36, period: "01 – 28 février", size: "11 ko"  },
   ];
+
+  const onDrop = e => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) onFile(file);
+  };
 
   return (
     <main className="ie-main">
@@ -120,7 +201,8 @@ function ImportEmpty({ onPick, onError }) {
                    border: 1.5px dashed rgba(184,105,61,0.45);
                    border-radius: 14px; padding: 40px 28px;
                    display: flex; flex-direction: column; align-items: center; gap: 14px;
-                   position: relative; overflow: hidden; }
+                   position: relative; overflow: hidden; transition: background 0.15s, border-color 0.15s; }
+        .ie-drop.over { background: var(--amber-100); border-color: var(--amber-500); border-style: solid; }
         .ie-drop::before { content: ""; position: absolute; inset: 0;
                            background-image: repeating-linear-gradient(45deg, transparent 0 14px, rgba(184,105,61,0.025) 14px 16px);
                            pointer-events: none; }
@@ -184,6 +266,11 @@ function ImportEmpty({ onPick, onError }) {
         .ie-hist-act > button { width: 26px; height: 26px; padding: 0; }
       `}</style>
 
+      {/* Input fichier caché — déclenché par le bouton */}
+      <input ref={fileRef} type="file" accept=".csv,.pdf,.ofx,.qif,.txt"
+             style={{ display: "none" }}
+             onChange={e => { const f = e.target.files[0]; if (f) onFile(f); e.target.value = ""; }} />
+
       <div className="ie-top">
         <div>
           <div className="ie-bread">Ambre · <strong>Importer un relevé</strong></div>
@@ -196,7 +283,11 @@ function ImportEmpty({ onPick, onError }) {
       </div>
 
       {/* DROP ZONE */}
-      <div className="ie-drop">
+      <div className={"ie-drop" + (dragging ? " over" : "")}
+           onDragOver={e => { e.preventDefault(); setDragging(true); }}
+           onDragEnter={e => { e.preventDefault(); setDragging(true); }}
+           onDragLeave={() => setDragging(false)}
+           onDrop={onDrop}>
         <div className="ie-drop-ico">
           <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6"
                strokeLinecap="round" strokeLinejoin="round">
@@ -206,13 +297,16 @@ function ImportEmpty({ onPick, onError }) {
             <path d="M12 18l4-4 4 4"/>
           </svg>
         </div>
-        <div className="ie-drop-t">Glissez un relevé ici</div>
+        <div className="ie-drop-t">
+          {dragging ? "Déposez le fichier ici" : "Glissez un relevé ici"}
+        </div>
         <div className="ie-drop-s">
           Ambre lit les relevés PDF de la plupart des banques françaises et les fichiers CSV
           génériques. Les transactions sont extraites et pré-classées automatiquement.
         </div>
         <div className="ie-drop-actions">
-          <button className="ie-btn amber" style={{ padding: "9px 16px", fontSize: 13 }} onClick={onPick}>
+          <button className="ie-btn amber" style={{ padding: "9px 16px", fontSize: 13 }}
+                  onClick={() => fileRef.current?.click()}>
             <IcUpload size={14}/>Parcourir mes fichiers
           </button>
           <span style={{ fontSize: 12, color: "var(--ink-500)" }}>ou faites glisser le fichier</span>
@@ -308,13 +402,29 @@ function ImportEmpty({ onPick, onError }) {
 /* ─────────────────────────────────────────────────────────────────
    2. Aperçu — table éditable + récap + règle suggérée
    ───────────────────────────────────────────────────────────────── */
-function ImportPreview({ onConfirm, onCancel }) {
-  const review = [
+function ImportPreview({ onConfirm, onCancel, txs, fileName, fileSize }) {
+  const [catOverrides, setCatOverrides] = useState({});
+  const [catPickerRow, setCatPickerRow] = useState(null);
+  const [filter, setFilter] = useState("all");
+
+  const allCats = [
+    { id: "alim", label: "Alimentation", color: "#b8693d" },
+    { id: "loy",  label: "Logement",     color: "#3d2817" },
+    { id: "tra",  label: "Transports",   color: "#6b7a4f" },
+    { id: "loi",  label: "Loisirs",      color: "#a85a48" },
+    { id: "san",  label: "Santé",        color: "#9d8b73" },
+    { id: "abo",  label: "Abonnements",  color: "#cd8459" },
+    { id: "inc",  label: "Revenus",      color: "#6b7a4f" },
+    { id: "epa",  label: "Épargne",      color: "#9d8b73" },
+  ];
+
+  // Données réelles si disponibles, sinon mock de démonstration
+  const review = txs || [
     { d: "29/04", lbl: "AMAZON EU SARL",         sub: "PAIEMENT PAR CARTE",   cat: "loi",  conf: "low",  amt: -34.99 },
     { d: "28/04", lbl: "SALAIRE AVRIL",          sub: "VIR ENT — DUPONT SAS", cat: "inc",  conf: "high", amt: +2560.00 },
     { d: "27/04", lbl: "AUCHAN DRIVE",           sub: "PAIEMENT PAR CARTE",   cat: "alim", conf: "high", amt: -82.40 },
     { d: "26/04", lbl: "PRLV STORAGE BOX",       sub: "PRELEVEMENT SEPA",     cat: null,   conf: "none", amt: -12.00 },
-    { d: "25/04", lbl: "RETRAIT DAB Lyon Part-Dieu", sub: "RETRAIT ESPECES",  cat: null,   conf: "none", amt: -60.00 },
+    { d: "25/04", lbl: "RETRAIT DAB Lyon",       sub: "RETRAIT ESPECES",      cat: null,   conf: "none", amt: -60.00 },
     { d: "24/04", lbl: "SNCF INTERNET",          sub: "PAIEMENT PAR CARTE",   cat: "tra",  conf: "high", amt: -67.00 },
     { d: "23/04", lbl: "BOULANGERIE PICHON",     sub: "PAIEMENT PAR CARTE",   cat: "alim", conf: "high", amt: -8.40 },
     { d: "22/04", lbl: "NETFLIX.COM",            sub: "PAIEMENT PAR CARTE",   cat: "abo",  conf: "med",  amt: -13.49 },
@@ -326,16 +436,25 @@ function ImportPreview({ onConfirm, onCancel }) {
     { d: "10/04", lbl: "FNAC.COM",               sub: "PAIEMENT PAR CARTE",   cat: "loi",  conf: "med",  amt: -29.90 },
   ];
 
-  const recap = [
-    { id: "loy",  label: "Logement",     color: "#3d2817", count: 1,  sum: 920.00 },
-    { id: "alim", label: "Alimentation", color: "#b8693d", count: 14, sum: 432.60 },
-    { id: "tra",  label: "Transports",   color: "#6b7a4f", count: 5,  sum: 167.80 },
-    { id: "abo",  label: "Abonnements",  color: "#cd8459", count: 4,  sum: 54.99 },
-    { id: "loi",  label: "Loisirs",      color: "#a85a48", count: 8,  sum: 142.30 },
-    { id: "san",  label: "Santé",        color: "#9d8b73", count: 2,  sum: 77.50 },
-  ];
+  const withCat = review.map((t, i) => ({
+    ...t,
+    cat: catOverrides[i] !== undefined ? catOverrides[i] : t.cat,
+  }));
 
-  const catById = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
+  const noCat   = withCat.filter(t => !t.cat).length;
+  const toCheck = withCat.filter(t => t.conf === "low" || t.conf === "none").length;
+
+  const filtered = filter === "all" ? withCat
+    : filter === "check" ? withCat.filter(t => t.conf === "low" || t.conf === "none")
+    : withCat.filter(t => !t.cat);
+
+  const totalDebit  = withCat.filter(t => t.amt < 0).reduce((s, t) => s + t.amt, 0);
+  const totalCredit = withCat.filter(t => t.amt > 0).reduce((s, t) => s + t.amt, 0);
+
+  const catById = Object.fromEntries(allCats.map(c => [c.id, c]));
+
+  const displayName = fileName || "releve-bnp-avril-2026.pdf";
+  const displaySize = fileSize ? fmtSize(fileSize) : "318 ko";
 
   return (
     <main className="ip-main">
@@ -409,8 +528,8 @@ function ImportPreview({ onConfirm, onCancel }) {
                  border-radius: 3.5px; cursor: pointer; }
         .ip-cb.checked { background: var(--amber-500); border-color: var(--amber-500);
                          position: relative; }
-        .ip-cb.checked::after { content: ""; position: absolute; left: 3px; top: 0px;
-                                width: 4px; height: 8px;
+        .ip-cb.checked::after { content: ""; position: absolute; left: 3px; top: 1px;
+                                width: 4px; height: 7px;
                                 border: solid var(--cream-50); border-width: 0 1.5px 1.5px 0;
                                 transform: rotate(45deg); }
         .ip-date { font-family: var(--font-mono); font-size: 12px; color: var(--ink-500); }
@@ -421,7 +540,8 @@ function ImportPreview({ onConfirm, onCancel }) {
         .ip-cat { display: inline-flex; align-items: center; gap: 6px;
                   padding: 4px 8px 4px 10px;
                   border: 1px dashed var(--line-strong); border-radius: 999px;
-                  font-size: 11px; cursor: pointer; background: var(--cream-50); }
+                  font-size: 11px; cursor: pointer; background: var(--cream-50);
+                  position: relative; }
         .ip-cat.solid { border-style: solid; }
         .ip-cat-none { color: var(--amber-500); border-color: rgba(184,105,61,0.4);
                        background: var(--amber-100); }
@@ -429,6 +549,13 @@ function ImportPreview({ onConfirm, onCancel }) {
         .conf-high { background: var(--sage-500); }
         .conf-med  { background: var(--amber-500); }
         .conf-low  { background: var(--rose-500); }
+        .ip-cat-picker { position: absolute; top: calc(100% + 4px); left: 0; z-index: 20;
+                         background: var(--cream-50); border: 1px solid var(--amber-500);
+                         border-radius: 10px; padding: 6px; min-width: 160px;
+                         box-shadow: 0 4px 14px rgba(61,40,23,0.12); }
+        .ip-cat-picker div { display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+                              border-radius: 7px; cursor: pointer; font-size: 12px; }
+        .ip-cat-picker div:hover { background: var(--amber-100); }
 
         .ip-amt { font-family: var(--font-mono); font-size: 13px; text-align: right;
                   color: var(--ink-800); font-weight: 500; }
@@ -459,60 +586,70 @@ function ImportPreview({ onConfirm, onCancel }) {
       <div className="ip-top">
         <div>
           <div className="ip-bread">
-            <span className="crumb-link">Importer</span>
+            <span className="crumb-link" onClick={onCancel}>Importer</span>
             <IcArrowR size={10}/>
             <strong>Aperçu</strong>
           </div>
           <h1 className="ip-h1">
-            Relevé BNP Paribas — avril 2026
-            <span className="file">releve-bnp-avril-2026.pdf · 318 ko</span>
+            {displayName.replace(/\.[^.]+$/, "").replace(/-/g, " ").replace(/_/g, " ")}
+            <span className="file">{displayName} · {displaySize}</span>
           </h1>
         </div>
         <div className="ip-tool">
           <button className="ip-btn ghost" onClick={onCancel}>Annuler</button>
-          <button className="ip-btn"><IcSearch size={14}/>Aperçu du PDF</button>
           <button className="ip-btn amber" onClick={onConfirm}>
-            <IcArrowR size={14}/>Importer 47 transactions
+            <IcArrowR size={14}/>Importer {review.length} transactions
           </button>
         </div>
       </div>
 
-      {/* STATS */}
+      {/* STATS — calculées depuis les vraies données */}
       <div className="ip-stats">
         <div className="ip-stat">
           <div className="ip-stat-l">Transactions détectées</div>
-          <div className="ip-stat-v">47</div>
-          <div className="ip-stat-s">dont 6 à vérifier · 2 sans catégorie</div>
+          <div className="ip-stat-v">{review.length}</div>
+          <div className="ip-stat-s">dont {toCheck} à vérifier · {noCat} sans catégorie</div>
         </div>
         <div className="ip-stat">
           <div className="ip-stat-l">Période</div>
-          <div className="ip-stat-v">01 – 30 avr.</div>
-          <div className="ip-stat-s">30 jours · sans doublon avec mars</div>
+          <div className="ip-stat-v" style={{ fontSize: 18, paddingTop: 4 }}>
+            {review[review.length - 1]?.d || "—"} → {review[0]?.d || "—"}
+          </div>
+          <div className="ip-stat-s">{review.length} lignes importées</div>
         </div>
         <div className="ip-stat">
           <div className="ip-stat-l">Total débits</div>
-          <div className="ip-stat-v" style={{ color: "var(--rose-500)" }}>−1 695,00 €</div>
-          <div className="ip-stat-s">42 mouvements</div>
+          <div className="ip-stat-v" style={{ color: "var(--rose-500)" }}>{fmtEUR(totalDebit, 2)}</div>
+          <div className="ip-stat-s">{review.filter(t => t.amt < 0).length} mouvements</div>
         </div>
         <div className="ip-stat">
           <div className="ip-stat-l">Total crédits</div>
-          <div className="ip-stat-v" style={{ color: "var(--sage-500)" }}>+2 560,00 €</div>
-          <div className="ip-stat-s">5 mouvements</div>
+          <div className="ip-stat-v" style={{ color: "var(--sage-500)" }}>+{fmtEUR(Math.abs(totalCredit), 2)}</div>
+          <div className="ip-stat-s">{review.filter(t => t.amt > 0).length} mouvements</div>
         </div>
       </div>
 
       {/* TWO COLUMNS */}
       <div className="ip-cols">
-        <div className="ip-card">
+        <div className="ip-card" style={{ position: "relative" }}>
           <div className="ip-card-h">
             <div>
               <div className="ip-card-t">Transactions extraites</div>
               <div className="ip-card-s">cliquez sur une catégorie pour la modifier</div>
             </div>
             <div className="ip-tabs">
-              <button className="ip-tab active">Tout <span className="num">47</span></button>
-              <button className="ip-tab warn">À vérifier <span className="num">6</span></button>
-              <button className="ip-tab">Sans catégorie <span className="num">2</span></button>
+              <button className={"ip-tab" + (filter === "all" ? " active" : "")}
+                      onClick={() => setFilter("all")}>
+                Tout <span className="num">{review.length}</span>
+              </button>
+              <button className={"ip-tab warn" + (filter === "check" ? " active" : "")}
+                      onClick={() => setFilter("check")}>
+                À vérifier <span className="num">{toCheck}</span>
+              </button>
+              <button className={"ip-tab" + (filter === "nocat" ? " active" : "")}
+                      onClick={() => setFilter("nocat")}>
+                Sans catégorie <span className="num">{noCat}</span>
+              </button>
             </div>
           </div>
           <div className="ip-tr head">
@@ -522,32 +659,52 @@ function ImportPreview({ onConfirm, onCancel }) {
             <span>Catégorie suggérée</span>
             <span style={{ textAlign: "right" }}>Montant</span>
           </div>
-          <div className="ip-tbody">
-            {review.map((t, i) => {
-              const cat = t.cat ? catById[t.cat] : null;
+          <div className="ip-tbody" onClick={() => setCatPickerRow(null)}>
+            {filtered.map((t, i) => {
+              const origIdx = withCat.indexOf(t);
+              const catInfo = t.cat ? (t.cat === "inc"
+                ? { label: "Revenus", color: "var(--sage-500)" }
+                : catById[t.cat] || null)
+                : null;
               const isReview = t.conf === "low" || t.conf === "none";
               return (
                 <div key={i} className={"ip-tr" + (isReview ? " review" : "")}>
-                  <span className={"ip-cb" + (i % 5 === 0 ? " checked" : "")}/>
+                  <span className="ip-cb"/>
                   <span className="ip-date">{t.d}</span>
                   <div>
                     <div className="ip-lbl">{t.lbl}</div>
-                    <div className="ip-sub">{t.sub}</div>
+                    {t.sub && <div className="ip-sub">{t.sub}</div>}
                   </div>
-                  <div>
-                    {t.cat === "inc" ? (
-                      <span className="ip-cat solid" style={{ borderColor: "rgba(107,122,79,0.4)", color: "var(--sage-500)" }}>
-                        <span className="ip-cat-conf conf-high"/>Revenus<IcChevDn size={10}/>
-                      </span>
-                    ) : cat ? (
-                      <span className="ip-cat solid" style={{ borderColor: cat.color + "55", color: cat.color }}>
+                  <div style={{ position: "relative" }}>
+                    {catInfo ? (
+                      <span className="ip-cat solid"
+                            style={{ borderColor: (catInfo.color || "#9d8b73") + "55",
+                                     color: catInfo.color || "#9d8b73" }}
+                            onClick={e => { e.stopPropagation(); setCatPickerRow(catPickerRow === origIdx ? null : origIdx); }}>
                         <span className={"ip-cat-conf conf-" + t.conf}/>
-                        {cat.label}<IcChevDn size={10}/>
+                        {catInfo.label}<IcChevDn size={10}/>
                       </span>
                     ) : (
-                      <span className="ip-cat ip-cat-none">
+                      <span className="ip-cat ip-cat-none"
+                            onClick={e => { e.stopPropagation(); setCatPickerRow(catPickerRow === origIdx ? null : origIdx); }}>
                         <IcPlus size={10}/>Choisir<IcChevDn size={10}/>
                       </span>
+                    )}
+                    {catPickerRow === origIdx && (
+                      <div className="ip-cat-picker" onClick={e => e.stopPropagation()}>
+                        {allCats.map(c => (
+                          <div key={c.id}
+                               style={{ color: t.cat === c.id ? "var(--amber-500)" : "var(--ink-800)",
+                                        background: t.cat === c.id ? "var(--amber-100)" : undefined }}
+                               onClick={() => {
+                                 setCatOverrides(prev => ({ ...prev, [origIdx]: c.id }));
+                                 setCatPickerRow(null);
+                               }}>
+                            <span className="amb-dot" style={{ background: c.color }}/>
+                            {c.label}
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                   <span className={"ip-amt" + (t.amt > 0 ? " pos" : "")}>
@@ -565,31 +722,35 @@ function ImportPreview({ onConfirm, onCancel }) {
               <div className="ip-card-t">Récapitulatif</div>
               <div className="ip-card-s">par catégorie suggérée</div>
             </div>
-            <span className="amb-chip" style={{ color: "var(--sage-500)",
-                  borderColor: "rgba(107,122,79,0.35)", background: "rgba(107,122,79,0.08)" }}>
-              <span className="amb-dot" style={{ background: "var(--sage-500)" }}/>
-              87 % de confiance
-            </span>
           </div>
           <div className="ip-recap">
-            {recap.map(r => (
-              <div key={r.id} className="ip-recap-row">
-                <span className="ip-recap-l">
-                  <span className="amb-dot" style={{ background: r.color }}/>
-                  {r.label}
+            {allCats.map(c => {
+              const rows = withCat.filter(t => t.cat === c.id);
+              if (rows.length === 0) return null;
+              const sum = rows.reduce((s, t) => s + Math.abs(t.amt), 0);
+              return (
+                <div key={c.id} className="ip-recap-row">
+                  <span className="ip-recap-l">
+                    <span className="amb-dot" style={{ background: c.color }}/>
+                    {c.label}
+                  </span>
+                  <span className="ip-recap-c">{rows.length} tx</span>
+                  <span className="ip-recap-a">{fmtEUR(sum, 0)}</span>
+                </div>
+              );
+            })}
+            {noCat > 0 && (
+              <div className="ip-recap-row">
+                <span className="ip-recap-l" style={{ color: "var(--amber-500)" }}>
+                  <span className="amb-dot" style={{ background: "var(--amber-500)" }}/>
+                  Sans catégorie
                 </span>
-                <span className="ip-recap-c">{r.count} tx</span>
-                <span className="ip-recap-a">{fmtEUR(r.sum, 0)}</span>
+                <span className="ip-recap-c">{noCat} tx</span>
+                <span className="ip-recap-a">
+                  {fmtEUR(withCat.filter(t => !t.cat).reduce((s, t) => s + Math.abs(t.amt), 0), 0)}
+                </span>
               </div>
-            ))}
-            <div className="ip-recap-row">
-              <span className="ip-recap-l" style={{ color: "var(--amber-500)" }}>
-                <span className="amb-dot" style={{ background: "var(--amber-500)" }}/>
-                Sans catégorie
-              </span>
-              <span className="ip-recap-c">2 tx</span>
-              <span className="ip-recap-a">{fmtEUR(72, 0)}</span>
-            </div>
+            )}
 
             <div className="ip-rule">
               <div className="ip-rule-ico">
@@ -599,14 +760,14 @@ function ImportPreview({ onConfirm, onCancel }) {
                 </svg>
               </div>
               <div>
-                <div className="ip-rule-t">Créer une règle pour Netflix.com ?</div>
+                <div className="ip-rule-t">Créer des règles automatiques ?</div>
                 <div className="ip-rule-s">
-                  Toutes les transactions contenant « NETFLIX » seront classées en
-                  <strong style={{ color: "var(--ink-900)" }}> Abonnements</strong> à l'avenir.
+                  Ambre peut mémoriser les libellés récurrents pour classer
+                  automatiquement vos prochains relevés.
                 </div>
                 <div className="ip-rule-actions">
-                  <button className="ip-btn" style={{ padding: "5px 12px", fontSize: 11, background: "var(--cream-50)" }}>Plus tard</button>
-                  <button className="ip-btn amber" style={{ padding: "5px 12px", fontSize: 11 }}>Créer la règle</button>
+                  <button className="ip-btn" style={{ padding: "5px 12px", fontSize: 11 }}>Plus tard</button>
+                  <button className="ip-btn amber" style={{ padding: "5px 12px", fontSize: 11 }}>Configurer</button>
                 </div>
               </div>
             </div>
@@ -626,15 +787,11 @@ function ImportPreview({ onConfirm, onCancel }) {
 /* ─────────────────────────────────────────────────────────────────
    3. Succès — confirmation + récap + prochaines étapes
    ───────────────────────────────────────────────────────────────── */
-function ImportSuccess({ onAgain }) {
-  const recap = [
-    { id: "loy",  label: "Logement",     color: "#3d2817", count: 1,  sum: 920.00 },
-    { id: "alim", label: "Alimentation", color: "#b8693d", count: 14, sum: 432.60 },
-    { id: "tra",  label: "Transports",   color: "#6b7a4f", count: 5,  sum: 167.80 },
-    { id: "loi",  label: "Loisirs",      color: "#a85a48", count: 8,  sum: 142.30 },
-    { id: "abo",  label: "Abonnements",  color: "#cd8459", count: 4,  sum: 54.99 },
-    { id: "san",  label: "Santé",        color: "#9d8b73", count: 2,  sum: 77.50 },
-  ];
+function ImportSuccess({ onAgain, txs, fileName }) {
+  const count  = txs?.length || 47;
+  const debit  = txs ? txs.filter(t => t.amt < 0).reduce((s, t) => s + t.amt, 0) : -1695;
+  const credit = txs ? txs.filter(t => t.amt > 0).reduce((s, t) => s + t.amt, 0) : 2560;
+  const name   = fileName || "releve-bnp-avril-2026.pdf";
 
   return (
     <main className="su-main">
@@ -692,8 +849,7 @@ function ImportSuccess({ onAgain }) {
                      color: var(--ink-900); line-height: 1.1; margin-top: 4px; }
         .su-stat-s { font-size: 11px; color: var(--ink-500); font-family: var(--font-mono); }
 
-        .su-bot { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px;
-                  flex: 1; min-height: 0; }
+        .su-bot { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; }
         .su-card { background: var(--cream-50); border: 1px solid var(--line);
                    border-radius: 14px;
                    display: flex; flex-direction: column; overflow: hidden; }
@@ -701,18 +857,6 @@ function ImportSuccess({ onAgain }) {
                      display: flex; align-items: flex-start; justify-content: space-between; }
         .su-card-t { font-size: 13px; color: var(--ink-800); font-weight: 500; }
         .su-card-s { font-size: 11px; color: var(--ink-500); margin-top: 2px; }
-
-        .su-recap-list { padding: 8px 20px; overflow: auto; }
-        .su-recap-row { display: grid; grid-template-columns: 1fr 70px 90px;
-                        align-items: center; gap: 10px; padding: 9px 0;
-                        border-bottom: 1px dashed var(--line); }
-        .su-recap-row:last-child { border-bottom: none; }
-        .su-recap-l { display: flex; align-items: center; gap: 8px;
-                      font-size: 13px; color: var(--ink-800); }
-        .su-recap-c { font-family: var(--font-mono); font-size: 11px;
-                      color: var(--ink-500); text-align: right; }
-        .su-recap-a { font-family: var(--font-mono); font-size: 12.5px;
-                      color: var(--ink-800); font-weight: 500; text-align: right; }
 
         .su-next { padding: 18px 22px; display: flex; flex-direction: column; gap: 10px; }
         .su-next-item { display: grid; grid-template-columns: 36px 1fr auto; gap: 12px;
@@ -742,7 +886,6 @@ function ImportSuccess({ onAgain }) {
         <strong>Succès</strong>
       </div>
 
-      {/* HERO */}
       <div className="su-hero">
         <div className="su-check">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -756,82 +899,51 @@ function ImportSuccess({ onAgain }) {
             Import terminé
           </div>
           <h2 className="su-hero-h">
-            47 transactions ajoutées<br/>
+            {count} transactions ajoutées<br/>
             <em>à votre journal.</em>
           </h2>
           <p className="su-hero-s">
-            Le relevé d'avril 2026 a été lu et classé. Vous pouvez modifier la catégorie
+            Le relevé a été lu et classé. Vous pouvez modifier la catégorie
             de n'importe quelle transaction à tout moment depuis la liste.
           </p>
           <div className="su-hero-meta">
-            <span>Fichier · <strong>releve-bnp-avril-2026.pdf</strong></span>
-            <span>Période · <strong>01 – 30 avril</strong></span>
-            <span>Durée · <strong>2,4 s</strong></span>
+            <span>Fichier · <strong>{name}</strong></span>
+            <span>Transactions · <strong>{count}</strong></span>
           </div>
         </div>
         <div className="su-hero-actions">
           <button className="su-btn primary"><IcList size={14}/>Voir mes transactions</button>
           <button className="su-btn"><IcHome size={14}/>Retour au tableau</button>
-          <button className="su-btn ghost" onClick={onAgain}>↺ Annuler cet import</button>
+          <button className="su-btn ghost" onClick={onAgain}>↺ Importer un autre relevé</button>
         </div>
       </div>
 
-      {/* STATS */}
       <div className="su-stats">
         <div className="su-stat">
           <div className="su-stat-l">Transactions ajoutées</div>
-          <div className="su-stat-v">47</div>
+          <div className="su-stat-v">{count}</div>
           <div className="su-stat-s">0 doublon · 0 ignorée</div>
         </div>
         <div className="su-stat">
-          <div className="su-stat-l">Catégorisées auto.</div>
-          <div className="su-stat-v" style={{ color: "var(--sage-500)" }}>
-            41 <span style={{ fontSize: 14, color: "var(--ink-500)" }}>/ 47</span>
-          </div>
-          <div className="su-stat-s">87 % · 6 à vérifier</div>
-        </div>
-        <div className="su-stat">
           <div className="su-stat-l">Total débits</div>
-          <div className="su-stat-v" style={{ color: "var(--rose-500)" }}>−1 695 €</div>
-          <div className="su-stat-s">42 mouvements</div>
+          <div className="su-stat-v" style={{ color: "var(--rose-500)" }}>{fmtEUR(debit, 2)}</div>
+          <div className="su-stat-s">{txs ? txs.filter(t => t.amt < 0).length : 42} mouvements</div>
         </div>
         <div className="su-stat">
           <div className="su-stat-l">Total crédits</div>
-          <div className="su-stat-v" style={{ color: "var(--sage-500)" }}>+2 560 €</div>
-          <div className="su-stat-s">5 mouvements</div>
+          <div className="su-stat-v" style={{ color: "var(--sage-500)" }}>+{fmtEUR(Math.abs(credit), 2)}</div>
+          <div className="su-stat-s">{txs ? txs.filter(t => t.amt > 0).length : 5} mouvements</div>
+        </div>
+        <div className="su-stat">
+          <div className="su-stat-l">Solde net</div>
+          <div className="su-stat-v" style={{ color: (credit + debit) >= 0 ? "var(--sage-500)" : "var(--rose-500)" }}>
+            {(credit + debit) >= 0 ? "+" : ""}{fmtEUR(credit + debit, 2)}
+          </div>
+          <div className="su-stat-s">sur la période</div>
         </div>
       </div>
 
       <div className="su-bot">
-        <div className="su-card">
-          <div className="su-card-h">
-            <div>
-              <div className="su-card-t">Récapitulatif par catégorie</div>
-              <div className="su-card-s">comparaison avec mars 2026 entre parenthèses</div>
-            </div>
-            <button className="su-btn" style={{ padding: "4px 10px", fontSize: 11 }}>
-              Voir le détail <IcArrowR size={11}/>
-            </button>
-          </div>
-          <div className="su-recap-list">
-            {recap.map(r => (
-              <div key={r.id} className="su-recap-row">
-                <span className="su-recap-l">
-                  <span className="amb-dot" style={{ background: r.color }}/>
-                  {r.label}
-                </span>
-                <span className="su-recap-c">{r.count} tx</span>
-                <span className="su-recap-a">{fmtEUR(r.sum, 0)}</span>
-              </div>
-            ))}
-            <div className="su-recap-row" style={{ paddingTop: 12, marginTop: 4, borderTop: "1px solid var(--line)" }}>
-              <span className="su-recap-l" style={{ fontWeight: 500 }}>Total avril 2026</span>
-              <span className="su-recap-c">42 tx</span>
-              <span className="su-recap-a" style={{ color: "var(--rose-500)" }}>{fmtEUR(1695, 0)}</span>
-            </div>
-          </div>
-        </div>
-
         <div className="su-card">
           <div className="su-card-h">
             <div>
@@ -843,8 +955,8 @@ function ImportSuccess({ onAgain }) {
             <div className="su-next-item primary">
               <div className="su-next-ico"><IcBell size={16}/></div>
               <div>
-                <div className="su-next-t">6 transactions à vérifier</div>
-                <div className="su-next-s">Ambre n'était pas sûr du classement — un rapide coup d'œil suffira.</div>
+                <div className="su-next-t">Vérifier les transactions non classées</div>
+                <div className="su-next-s">Quelques libellés n'ont pas été reconnus — un rapide coup d'œil suffira.</div>
               </div>
               <IcArrowR size={14} style={{ color: "var(--amber-500)" }}/>
             </div>
@@ -852,7 +964,7 @@ function ImportSuccess({ onAgain }) {
               <div className="su-next-ico"><IcImport size={16}/></div>
               <div>
                 <div className="su-next-t">Importer un autre relevé</div>
-                <div className="su-next-s">Pour comparer avec mars 2026 et affiner les tendances.</div>
+                <div className="su-next-s">Comparez avec d'autres périodes ou d'autres comptes.</div>
               </div>
               <IcArrowR size={14} style={{ color: "var(--ink-500)" }}/>
             </div>
@@ -860,11 +972,10 @@ function ImportSuccess({ onAgain }) {
               <div className="su-next-ico"><IcTag size={16}/></div>
               <div>
                 <div className="su-next-t">Créer des règles pour les récurrentes</div>
-                <div className="su-next-s">4 abonnements détectés — automatiser leur classement.</div>
+                <div className="su-next-s">Automatiser le classement des libellés répétitifs.</div>
               </div>
               <IcArrowR size={14} style={{ color: "var(--ink-500)" }}/>
             </div>
-
             <div className="su-reassure">
               <IcLock size={11}/>
               Aucune donnée n'a quitté votre appareil pendant cet import.
@@ -879,23 +990,8 @@ function ImportSuccess({ onAgain }) {
 /* ─────────────────────────────────────────────────────────────────
    4. Erreur — message principal + détails + cas fréquents
    ───────────────────────────────────────────────────────────────── */
-function ImportError({ onRetry }) {
-  const otherCases = [
-    {
-      kind: "duplicate",
-      title: "12 transactions déjà importées",
-      sub: "releve-bnp-avril-2026.pdf",
-      desc: "Vous avez importé un relevé qui chevauche partiellement mars 2026. Les doublons ont été détectés grâce à leur date + montant + libellé.",
-      tone: "warn",
-    },
-    {
-      kind: "corrupted",
-      title: "Fichier corrompu ou protégé",
-      sub: "relevé-2026-protégé.pdf",
-      desc: "Le PDF est verrouillé par mot de passe ou les pages ne peuvent pas être lues. Décochez la protection dans votre navigateur de PDF puis réessayez.",
-      tone: "danger",
-    },
-  ];
+function ImportError({ onRetry, errorMsg, fileName }) {
+  const name = fileName || "fichier-inconnu";
 
   return (
     <main className="ier-main">
@@ -942,44 +1038,21 @@ function ImportError({ onRetry }) {
                          border-color: var(--amber-500); font-weight: 500; }
         .ier-btn.ghost { background: transparent; border-color: transparent; color: var(--ink-600); }
 
-        .ier-detail { display: grid; grid-template-columns: 1fr 1.2fr; gap: 16px;
-                      background: var(--cream-50); border: 1px solid var(--line);
-                      border-radius: 14px; padding: 20px 24px; }
-        .ier-detail-h { font-size: 12px; color: var(--ink-800); font-weight: 500;
-                        letter-spacing: 0.02em; margin-bottom: 10px; }
-        .ier-detail-s { font-size: 11.5px; color: var(--ink-600); line-height: 1.5; margin-bottom: 10px; }
-        .ier-detail-list { display: flex; flex-direction: column; gap: 8px; }
-        .ier-detail-item { display: flex; gap: 10px; align-items: flex-start;
-                           font-size: 12.5px; color: var(--ink-700); }
-        .ier-detail-item .num { width: 22px; height: 22px; border-radius: 6px;
-                                background: var(--cream-200); color: var(--ink-700);
-                                display: flex; align-items: center; justify-content: center;
-                                font-family: var(--font-mono); font-size: 11px;
-                                font-weight: 500; flex-shrink: 0; }
-        .ier-code { font-family: var(--font-mono); font-size: 12px; color: var(--ink-700);
-                    background: var(--cream-100); border-left: 3px solid var(--rose-500);
-                    padding: 12px 16px; border-radius: 0 8px 8px 0; margin-top: 4px; }
-        .ier-code .num { color: var(--ink-500); margin-right: 12px; }
-        .ier-code .err { color: var(--rose-500); }
-
-        .ier-others { background: var(--cream-50); border: 1px solid var(--line);
-                      border-radius: 14px; padding: 0; flex: 1; min-height: 0;
-                      overflow: hidden; display: flex; flex-direction: column; }
-        .ier-others-h { padding: 16px 22px 12px; border-bottom: 1px solid var(--line);
-                        display: flex; justify-content: space-between; align-items: flex-start; }
-        .ier-other-row { display: grid; grid-template-columns: 44px 1fr 140px; gap: 16px;
-                         align-items: center; padding: 14px 22px;
-                         border-bottom: 1px dashed var(--line); }
-        .ier-other-row:last-child { border-bottom: none; }
-        .ier-other-ico { width: 44px; height: 44px; border-radius: 11px;
-                         display: flex; align-items: center; justify-content: center; }
-        .ier-other-ico.warn { background: var(--amber-100); color: var(--amber-500); }
-        .ier-other-ico.danger { background: rgba(168,90,72,0.10); color: var(--rose-500); }
-        .ier-other-t { font-size: 13.5px; color: var(--ink-900); font-weight: 500; }
-        .ier-other-sub { font-size: 11px; color: var(--ink-500); margin-top: 2px;
-                         font-family: var(--font-mono); }
-        .ier-other-d { font-size: 12px; color: var(--ink-600); margin-top: 4px; line-height: 1.4; }
-        .ier-other-cta { display: flex; flex-direction: column; gap: 6px; }
+        .ier-tips { background: var(--cream-50); border: 1px solid var(--line);
+                    border-radius: 14px; padding: 20px 24px; }
+        .ier-tips-h { font-size: 12px; color: var(--ink-800); font-weight: 500; margin-bottom: 14px; }
+        .ier-tip { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px;
+                   font-size: 12.5px; color: var(--ink-700); }
+        .ier-tip:last-child { margin-bottom: 0; }
+        .ier-tip .num { width: 22px; height: 22px; border-radius: 6px;
+                        background: var(--cream-200); color: var(--ink-700);
+                        display: flex; align-items: center; justify-content: center;
+                        font-family: var(--font-mono); font-size: 11px;
+                        font-weight: 500; flex-shrink: 0; }
+        .ier-errbox { font-family: var(--font-mono); font-size: 12px; color: var(--rose-500);
+                      background: rgba(168,90,72,0.08); border-left: 3px solid var(--rose-500);
+                      padding: 12px 16px; border-radius: 0 8px 8px 0; margin-top: 12px;
+                      line-height: 1.5; }
       `}</style>
 
       <div className="ier-bread">
@@ -988,7 +1061,6 @@ function ImportError({ onRetry }) {
         <span className="err">Erreur de lecture</span>
       </div>
 
-      {/* HERO */}
       <div className="ier-hero">
         <div className="ier-mark">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -998,98 +1070,47 @@ function ImportError({ onRetry }) {
           </svg>
         </div>
         <div>
-          <div className="ier-l"><span className="dot"/>Format non reconnu</div>
-          <h2 className="ier-h">Impossible de lire ce <em>relevé</em>.</h2>
+          <div className="ier-l"><span className="dot"/>Impossible de lire ce fichier</div>
+          <h2 className="ier-h">Relevé <em>non reconnu</em>.</h2>
           <p className="ier-s">
-            Ambre n'a pas reconnu la structure du fichier — ni le format BNP, ni un CSV standard. Le PDF est
-            peut-être un export filtré, scanné, ou suit un format propriétaire que nous n'avons pas encore couvert.
+            {errorMsg || "Ambre n'a pas reconnu la structure du fichier. Consultez les suggestions ci-dessous."}
           </p>
           <div className="ier-meta">
-            <span>Fichier · <strong>autre-export-2024-Q4.pdf</strong></span>
-            <span>Taille · <strong>1,2 Mo · 6 pages</strong></span>
-            <span>Type détecté · <strong>application/pdf</strong></span>
+            <span>Fichier · <strong>{name}</strong></span>
           </div>
         </div>
         <div className="ier-actions">
           <button className="ier-btn amber" onClick={onRetry}><IcImport size={14}/>Essayer un autre fichier</button>
-          <button className="ier-btn"><IcTag size={14}/>Configurer un parseur custom</button>
           <button className="ier-btn ghost">↻ Réessayer la lecture</button>
-          <button className="ier-btn ghost">🛟 Voir l'aide d'import</button>
         </div>
       </div>
 
-      {/* Detail */}
-      <div className="ier-detail">
-        <div>
-          <div className="ier-detail-h">Ce qu'a essayé Ambre</div>
-          <div className="ier-detail-list">
-            {[
-              { n: "1", t: "Détection du format",            s: "PDF valide · 6 pages · non chiffré ✓" },
-              { n: "2", t: "Recherche d'un parseur connu",    s: "Aucun parseur correspondant (BNP, LBP, CA, BoursoBank, Revolut)" },
-              { n: "3", t: "Extraction tabulaire générique",  s: "Tableaux détectés mais colonnes ambiguës — pas de date claire" },
-              { n: "4", t: "Fallback texte simple",            s: "Échoué · le contenu est mis en page sur 2 colonnes" },
-            ].map(s => (
-              <div key={s.n} className="ier-detail-item">
-                <span className="num">{s.n}</span>
-                <div>
-                  <div style={{ color: "var(--ink-900)", fontWeight: 500 }}>{s.t}</div>
-                  <div style={{ color: "var(--ink-500)", marginTop: 2 }}>{s.s}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <div className="ier-detail-h">Journal technique</div>
-          <div className="ier-detail-s">
-            Si vous écrivez un parseur custom, voici les premières lignes interprétées du fichier.
-            Vous pouvez consulter le log complet dans <strong>Paramètres → Sauvegarde</strong>.
-          </div>
-          <div className="ier-code">
-            <div><span className="num">01</span>scanning PDF · 6 pages · 1.2MB</div>
-            <div><span className="num">02</span>fonts: Helvetica, Helvetica-Bold</div>
-            <div><span className="num">03</span>tables: 12 candidates, 2-column layout detected</div>
-            <div><span className="num">04</span>match-bnp:  <span className="err">no match (logo missing)</span></div>
-            <div><span className="num">05</span>match-csv:  <span className="err">not a csv</span></div>
-            <div><span className="num">06</span>match-ofx:  <span className="err">no OFX header</span></div>
-            <div><span className="num">07</span>generic-table: ambiguous column types</div>
-            <div><span className="num">08</span><span className="err">→ ERR_FORMAT_UNKNOWN</span>  abandoning</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Other error cases */}
-      <div className="ier-others">
-        <div className="ier-others-h">
+      <div className="ier-tips">
+        <div className="ier-tips-h">Que faire ?</div>
+        <div className="ier-tip">
+          <span className="num">1</span>
           <div>
-            <div style={{ fontSize: 13, color: "var(--ink-800)", fontWeight: 500 }}>Autres erreurs récentes</div>
-            <div style={{ fontSize: 11, color: "var(--ink-500)", marginTop: 2 }}>2 fichiers · cliquer pour voir le détail</div>
+            <div style={{ fontWeight: 500, color: "var(--ink-900)" }}>Exportez un CSV depuis votre espace bancaire</div>
+            <div style={{ marginTop: 3, color: "var(--ink-500)" }}>Dans votre banque en ligne : Mes comptes → Télécharger → CSV ou Excel. Renommez le fichier en .csv si nécessaire.</div>
           </div>
-          <button className="ier-btn ghost" style={{ padding: "4px 10px" }}>Effacer le journal</button>
         </div>
-        {otherCases.map(c => (
-          <div key={c.kind} className="ier-other-row">
-            <div className={"ier-other-ico " + c.tone}>
-              {c.kind === "duplicate"
-                ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="14" height="14" rx="2"/><rect x="9" y="9" width="11" height="11" rx="2"/></svg>
-                : <IcLock size={20}/>}
-            </div>
-            <div>
-              <div className="ier-other-t">{c.title}</div>
-              <div className="ier-other-sub">{c.sub}</div>
-              <div className="ier-other-d">{c.desc}</div>
-            </div>
-            <div className="ier-other-cta">
-              <button className="ier-btn" style={{ padding: "6px 10px", fontSize: 11.5 }}>
-                {c.kind === "duplicate" ? "Importer uniquement les nouvelles" : "Ouvrir le fichier"}
-              </button>
-              <button className="ier-btn ghost" style={{ padding: "4px 10px", fontSize: 11 }}>
-                Tout annuler
-              </button>
-            </div>
+        <div className="ier-tip">
+          <span className="num">2</span>
+          <div>
+            <div style={{ fontWeight: 500, color: "var(--ink-900)" }}>Vérifiez que le CSV a une ligne d'en-tête</div>
+            <div style={{ marginTop: 3, color: "var(--ink-500)" }}>La première ligne doit contenir les noms des colonnes : Date, Libellé (ou Description), Montant.</div>
           </div>
-        ))}
+        </div>
+        <div className="ier-tip">
+          <span className="num">3</span>
+          <div>
+            <div style={{ fontWeight: 500, color: "var(--ink-900)" }}>Formats CSV supportés</div>
+            <div style={{ marginTop: 3, color: "var(--ink-500)" }}>Séparateur point-virgule (;) ou virgule (,) · encodage UTF-8 · montants avec virgule ou point décimal.</div>
+          </div>
+        </div>
+        {errorMsg && (
+          <div className="ier-errbox">{errorMsg}</div>
+        )}
       </div>
     </main>
   );
