@@ -31,6 +31,7 @@ export default function Dashboard() {
   const navigate    = useNavigate();
   const [monthIdx, setMonthIdx]     = useState(MONTHLY.length - 1);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [chartPeriod, setChartPeriod] = useState("12 m");
   const pickerRef = useRef(null);
 
   useEffect(() => {
@@ -285,7 +286,7 @@ export default function Dashboard() {
               })}
             </div>
           )}
-          <button className="atc-btn"><IcSearch size={14}/></button>
+          <button className="atc-btn" onClick={() => navigate("/transactions")}><IcSearch size={14}/></button>
           <button className="atc-btn amber" onClick={() => navigate("/import")}>
             <IcUpload size={14}/>Importer
           </button>
@@ -414,21 +415,25 @@ export default function Dashboard() {
             <div className="atc-card-h">
               <div>
                 <div className="atc-card-t">Évolution mensuelle</div>
-                <div className="atc-card-s">12 derniers mois</div>
+                <div className="atc-card-s">
+                  {chartPeriod === "12 m" ? "12 derniers mois"
+                  : chartPeriod === "6 m"  ? "6 derniers mois"
+                  : "2026 · janvier → mai"}
+                </div>
               </div>
               <div style={{ display: "flex", gap: 4 }}>
-                {["12 m","6 m","YTD"].map((l, i) => (
-                  <button key={l} className="atc-btn" style={{
+                {["12 m","6 m","YTD"].map(l => (
+                  <button key={l} className="atc-btn" onClick={() => setChartPeriod(l)} style={{
                     padding: "3px 9px", fontSize: 10,
-                    background: i === 0 ? "var(--amber-100)" : undefined,
-                    color: i === 0 ? "var(--amber-500)" : undefined,
-                    borderColor: i === 0 ? "rgba(184,105,61,0.3)" : undefined
+                    background:   l === chartPeriod ? "var(--amber-100)" : undefined,
+                    color:        l === chartPeriod ? "var(--amber-500)" : undefined,
+                    borderColor:  l === chartPeriod ? "rgba(184,105,61,0.3)" : undefined,
                   }}>{l}</button>
                 ))}
               </div>
             </div>
             <div style={{ flex: 1 }}>
-              <AreaChartLight/>
+              <AreaChartLight period={chartPeriod}/>
             </div>
           </div>
         </div>
@@ -443,7 +448,8 @@ export default function Dashboard() {
             </div>
             <div className="atc-cats">
               {CATEGORIES.slice(0, 6).map(c => (
-                <div key={c.id} className="atc-cat-card">
+                <div key={c.id} className="atc-cat-card" onClick={() => navigate("/categories")}
+                     style={{ cursor: "pointer" }}>
                   <div className="atc-cat-h">
                     <span className="amb-dot" style={{ background: c.color }}/>
                     {c.label}
@@ -475,7 +481,8 @@ export default function Dashboard() {
                 <div className="atc-card-t">Activité récente</div>
                 <div className="atc-card-s">10 derniers mouvements</div>
               </div>
-              <button className="atc-btn" style={{ padding: "4px 8px", fontSize: 10 }}>Tout voir →</button>
+              <button className="atc-btn" style={{ padding: "4px 8px", fontSize: 10 }}
+                      onClick={() => navigate("/transactions")}>Tout voir →</button>
             </div>
             <div className="atc-tl">
               {(() => {
@@ -519,15 +526,18 @@ export default function Dashboard() {
 }
 
 /* Aire d'évolution mensuelle utilisée dans le Dashboard */
-function AreaChartLight() {
-  const expVals = MONTHLY.map(m => m.exp);
+function AreaChartLight({ period = "12 m" }) {
+  const slice = period === "6 m" ? MONTHLY.slice(-6)
+              : period === "YTD" ? MONTHLY.filter((_, i) => i >= 7)
+              : MONTHLY;
+  const expVals = slice.map(m => m.exp);
   const min = Math.min(...expVals) * 0.85;
   const max = Math.max(...expVals) * 1.05;
   const width = 420, height = 180;
   const padX = 30, padY = 18, padR = 14, padB = 24;
   const innerW = width - padX - padR;
   const innerH = height - padY - padB;
-  const xs = MONTHLY.map((_, i) => padX + (i * innerW) / (MONTHLY.length - 1));
+  const xs = slice.map((_, i) => padX + (i * innerW) / (slice.length - 1));
   const yOf = v => padY + innerH - ((v - min) / (max - min)) * innerH;
   const pts = xs.map((x, i) => [x, yOf(expVals[i])]);
   const line = pathSmooth(pts);
@@ -557,7 +567,7 @@ function AreaChartLight() {
       <path d={line} fill="none" stroke="#b8693d" strokeWidth="1.6" strokeLinecap="round"/>
       <circle cx={xs[xs.length-1]} cy={pts[pts.length-1][1]} r="3.5" fill="#b8693d"/>
       <circle cx={xs[xs.length-1]} cy={pts[pts.length-1][1]} r="7" fill="#b8693d" fillOpacity="0.2"/>
-      {MONTHLY.map((m, i) => (
+      {slice.map((m, i) => (
         i % 2 === 0 && (
           <text key={i} x={xs[i]} y={height - 6} textAnchor="middle" fontSize="9"
                 fontFamily="var(--font-ui)" fill="rgba(61,40,23,0.5)">{m.m}</text>
