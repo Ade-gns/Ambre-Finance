@@ -2,6 +2,8 @@
    Vue d'ensemble du mois. Converti du fichier d'origine en composant React modulaire.
    Layout : sidebar (gérée par App) + main (ce composant). */
 
+import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { CATEGORIES, MONTHLY, TRANSACTIONS } from "../data/mockData";
 import {
   Sparkline, RingGauge, fmtEUR, pathSmooth
@@ -10,16 +12,48 @@ import {
   IcCalendar, IcSearch, IcUpload, IcChevDn, IcArrowUp, IcArrowDn, IcDot
 } from "../lib/icons";
 
+const MONTH_INFO = [
+  { label: "Juin",    year: 2025, full: "Juin 2025"      },
+  { label: "Juil.",   year: 2025, full: "Juillet 2025"   },
+  { label: "Août",    year: 2025, full: "Août 2025"       },
+  { label: "Sept.",   year: 2025, full: "Septembre 2025" },
+  { label: "Oct.",    year: 2025, full: "Octobre 2025"   },
+  { label: "Nov.",    year: 2025, full: "Novembre 2025"  },
+  { label: "Déc.",    year: 2025, full: "Décembre 2025"  },
+  { label: "Janv.",   year: 2026, full: "Janvier 2026"   },
+  { label: "Févr.",   year: 2026, full: "Février 2026"   },
+  { label: "Mars",    year: 2026, full: "Mars 2026"       },
+  { label: "Avril",   year: 2026, full: "Avril 2026"     },
+  { label: "Mai",     year: 2026, full: "Mai 2026"        },
+];
+
 export default function Dashboard() {
-  const current  = MONTHLY[MONTHLY.length - 1];
+  const navigate    = useNavigate();
+  const [monthIdx, setMonthIdx]     = useState(MONTHLY.length - 1);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef(null);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const onDown = e => { if (pickerRef.current && !pickerRef.current.contains(e.target)) setPickerOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [pickerOpen]);
+
+  const info     = MONTH_INFO[monthIdx];
+  const current  = MONTHLY[monthIdx];
+  const prev     = monthIdx > 0 ? MONTHLY[monthIdx - 1] : null;
+  const isLast   = monthIdx === MONTHLY.length - 1;
+
   const totalExp = current.exp;
   const totalInc = current.inc;
   const net      = totalInc - totalExp;
   const budget   = 2000;
   const pct      = totalExp / budget;
+  const expDelta = prev ? (totalExp - prev.exp) / prev.exp : 0;
 
   const daysInMonth = 31;
-  const today = 14;
+  const today = isLast ? 14 : daysInMonth;
   const dailyExp = Array.from({ length: daysInMonth }, (_, i) => {
     if (i >= today) return null;
     const base = 20 + (Math.sin(i * 0.7) + 1) * 30;
@@ -195,22 +229,66 @@ export default function Dashboard() {
           color: var(--ink-800);
         }
         .atc-tl-amt.pos { color: var(--sage-500); }
+
+        /* Month picker */
+        .atc-month-picker {
+          position: absolute; top: calc(100% + 6px); right: 0; z-index: 100;
+          background: var(--cream-50); border: 1px solid var(--line);
+          border-radius: 12px; padding: 6px;
+          box-shadow: 0 8px 24px rgba(61,40,23,0.12);
+          min-width: 200px;
+          max-height: 320px; overflow-y: auto;
+        }
+        .atc-month-opt {
+          display: flex; justify-content: space-between; align-items: center;
+          padding: 8px 12px; border-radius: 8px; cursor: pointer;
+          font-size: 13px; color: var(--ink-700);
+        }
+        .atc-month-opt:hover { background: var(--cream-100); }
+        .atc-month-opt.active {
+          background: var(--amber-100); color: var(--amber-500); font-weight: 500;
+        }
+        .atc-month-exp {
+          font-family: var(--font-mono); font-size: 11px; color: var(--ink-500);
+        }
+        .atc-month-opt.active .atc-month-exp { color: var(--amber-400); }
       `}</style>
 
       <div className="atc-top">
         <div>
-          <div className="atc-bread">Ambre · <strong>Tableau de bord</strong> · Mai 2026</div>
+          <div className="atc-bread">Ambre · <strong>Tableau de bord</strong> · {info.full}</div>
           <h1 style={{
             fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 400,
             margin: "4px 0 0", color: "var(--ink-900)", letterSpacing: "-0.01em"
           }}>
-            14 jours dans le mois, <em style={{ color: "var(--amber-500)" }}>17 restants</em>.
+            {isLast
+              ? <>14 jours dans le mois, <em style={{ color: "var(--amber-500)" }}>17 restants</em>.</>
+              : <>Mois terminé · <em style={{ color: "var(--amber-500)" }}>{fmtEUR(totalExp, 0)}</em> dépensés.</>
+            }
           </h1>
         </div>
-        <div className="atc-tool">
-          <button className="atc-btn"><IcCalendar size={14}/>Mai 2026 <IcChevDn size={12}/></button>
+        <div className="atc-tool" style={{ position: "relative" }} ref={pickerRef}>
+          <button className="atc-btn" onClick={() => setPickerOpen(v => !v)}>
+            <IcCalendar size={14}/>{info.full} <IcChevDn size={12}/>
+          </button>
+          {pickerOpen && (
+            <div className="atc-month-picker">
+              {[...MONTH_INFO].reverse().map((mi, ri) => {
+                const idx = MONTHLY.length - 1 - ri;
+                return (
+                  <div key={mi.full} className={"atc-month-opt" + (idx === monthIdx ? " active" : "")}
+                       onClick={() => { setMonthIdx(idx); setPickerOpen(false); }}>
+                    <span>{mi.full}</span>
+                    <span className="atc-month-exp">{fmtEUR(MONTHLY[idx].exp, 0)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <button className="atc-btn"><IcSearch size={14}/></button>
-          <button className="atc-btn amber"><IcUpload size={14}/>Importer</button>
+          <button className="atc-btn amber" onClick={() => navigate("/import")}>
+            <IcUpload size={14}/>Importer
+          </button>
         </div>
       </div>
 
@@ -224,8 +302,15 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="atc-hero-meta">
-            <span className="atc-pill warn"><IcArrowUp size={11}/>+8 % vs avril</span>
-            <span className="atc-pill">Projection · {fmtEUR(totalExp + (totalExp / 14) * 17, 0)}</span>
+            {prev && (
+              <span className={"atc-pill " + (expDelta > 0 ? "warn" : "good")}>
+                {expDelta > 0 ? <IcArrowUp size={11}/> : <IcArrowDn size={11}/>}
+                {expDelta > 0 ? "+" : ""}{Math.round(expDelta * 100)} % vs {MONTH_INFO[monthIdx - 1].label}
+              </span>
+            )}
+            {isLast && (
+              <span className="atc-pill">Projection · {fmtEUR(totalExp + (totalExp / 14) * 17, 0)}</span>
+            )}
           </div>
         </div>
 
