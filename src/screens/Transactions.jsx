@@ -127,15 +127,24 @@ function TxHeader() {
   );
 }
 
-function TxFilterBar({ withChips = true }) {
+function TxFilterBar({ withChips = true, filter = "all", onChangeFilter = () => {}, counts = { all: 18, exp: 16, inc: 1, tr: 1 } }) {
+  const segs = [
+    { key: "all", label: "Tout",       n: counts.all },
+    { key: "exp", label: "Dépenses",   n: counts.exp },
+    { key: "inc", label: "Revenus",    n: counts.inc },
+    { key: "tr",  label: "Transferts", n: counts.tr },
+  ];
   return (
     <>
       <div className="tx-toolbar">
         <div className="tx-segmented">
-          <button className="tx-seg active">Tout <span className="num">18</span></button>
-          <button className="tx-seg">Dépenses <span className="num">16</span></button>
-          <button className="tx-seg">Revenus <span className="num">1</span></button>
-          <button className="tx-seg">Transferts <span className="num">1</span></button>
+          {segs.map(s => (
+            <button key={s.key}
+                    className={"tx-seg" + (filter === s.key ? " active" : "")}
+                    onClick={() => onChangeFilter(s.key)}>
+              {s.label} <span className="num">{s.n}</span>
+            </button>
+          ))}
         </div>
         <div style={{ flex: 1 }}/>
         <div className="tx-search">
@@ -253,6 +262,23 @@ function TxTableHead() {
    Vue 1 — Liste par défaut
    ───────────────────────────────────────────────────────────────── */
 function TxDefault({ onRowClick, onSelectMany }) {
+  const [filter, setFilter] = useState("all");
+
+  // Calcul des compteurs : "exp" = dépenses (amt < 0 et cat != "epa"), "inc" = revenus (amt > 0), "tr" = transferts (cat == "epa")
+  const allTxs = TX_LIST;
+  const cExp = allTxs.filter(t => t.amt < 0 && t.cat !== "epa").length;
+  const cInc = allTxs.filter(t => t.amt > 0).length;
+  const cTr  = allTxs.filter(t => t.cat === "epa").length;
+  const counts = { all: allTxs.length, exp: cExp, inc: cInc, tr: cTr };
+
+  const matchFilter = (t) => {
+    if (filter === "all") return true;
+    if (filter === "exp") return t.amt < 0 && t.cat !== "epa";
+    if (filter === "inc") return t.amt > 0;
+    if (filter === "tr")  return t.cat === "epa";
+    return true;
+  };
+
   const groups = [
     { label: "Cette semaine · 12 – 14 mai",         sum: -1043.93, rows: TX_LIST.slice(0, 5) },
     { label: "Semaine du 5 mai · 5 – 11 mai",        sum: -253.34,  rows: TX_LIST.slice(5, 13) },
@@ -262,27 +288,31 @@ function TxDefault({ onRowClick, onSelectMany }) {
   return (
     <main className="tx-main">
       <TxHeader />
-      <TxFilterBar />
+      <TxFilterBar filter={filter} onChangeFilter={setFilter} counts={counts}/>
       <TxSummary />
 
       <div className="tx-table">
         <TxTableHead />
         <div className="tx-tbody">
-          {groups.map((g, gi) => (
-            <div key={g.label}>
-              <div className="tx-group-h">
-                <span>{g.label}</span>
-                <span className="sum">{g.sum > 0 ? "+" : ""}{fmtEUR(g.sum, 2)}</span>
+          {groups.map((g, gi) => {
+            const filteredRows = g.rows.filter(matchFilter);
+            if (filteredRows.length === 0) return null;
+            return (
+              <div key={g.label}>
+                <div className="tx-group-h">
+                  <span>{g.label}</span>
+                  <span className="sum">{g.sum > 0 ? "+" : ""}{fmtEUR(g.sum, 2)}</span>
+                </div>
+                {filteredRows.map((t, i) => (
+                  <TxRow key={gi + "-" + i} t={t}
+                         onClick={i === 0 && gi === 0 ? onRowClick : undefined}/>
+                ))}
               </div>
-              {g.rows.map((t, i) => (
-                <TxRow key={gi + "-" + i} t={t}
-                       onClick={i === 0 && gi === 0 ? onRowClick : undefined}/>
-              ))}
-            </div>
-          ))}
+            );
+          })
         </div>
         <div className="tx-pagination">
-          <span>Affichées 18 sur 18 · <strong>page 1 sur 1</strong></span>
+          <span>Affichées {allTxs.filter(matchFilter).length} sur {allTxs.length} · <strong>page 1 sur 1</strong></span>
           <div className="tx-pager">
             <button className="tx-btn" disabled>←</button>
             <button className="tx-btn active">1</button>

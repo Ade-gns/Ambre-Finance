@@ -3,13 +3,23 @@
    - Table de comparaison année par année (Mai 2025 vs Mai 2026)
    - Small multiples : un sparkline par catégorie */
 
+import { useState } from "react";
 import { CATEGORIES, MONTHLY } from "../data/mockData";
 import { fmtEUR, pathSmooth, Sparkline } from "../lib/chartPrimitives";
 import { IcCalendar, IcChevDn } from "../lib/icons";
 
 export default function Evolution() {
-  // Année précédente (faked à partir de MONTHLY)
-  const previousYear = MONTHLY.map((m, i) => ({
+  const [period, setPeriod] = useState("12m"); // 6m | 12m | 24m | YTD | cmp
+
+  // Détermine combien de mois afficher selon la période
+  // (avec MONTHLY qui contient 12 mois mockés, on simule en tronquant ou en répétant)
+  const monthsToShow = period === "6m" ? MONTHLY.slice(-6)
+                     : period === "24m" ? [...MONTHLY, ...MONTHLY]  // simulation : double les mois
+                     : period === "YTD" ? MONTHLY.slice(-5)         // jan→mai
+                     : MONTHLY;                                      // 12m ou cmp
+
+  // Année précédente (faked à partir des mois affichés)
+  const previousYear = monthsToShow.map((m, i) => ({
     ...m,
     exp: m.exp * (0.85 + Math.abs(Math.sin(i * 1.3)) * 0.1)
   }));
@@ -22,8 +32,8 @@ export default function Evolution() {
     )
   }));
 
-  const totalExp = MONTHLY.reduce((s, m) => s + m.exp, 0);
-  const totalInc = MONTHLY.reduce((s, m) => s + m.inc, 0);
+  const totalExp = monthsToShow.reduce((s, m) => s + m.exp, 0);
+  const totalInc = monthsToShow.reduce((s, m) => s + m.inc, 0);
   const totalNet = totalInc - totalExp;
 
   return (
@@ -37,14 +47,27 @@ export default function Evolution() {
         </div>
         <div className="ev-tool">
           <div className="ev-seg">
-            <button>6 m</button>
-            <button className="active">12 m</button>
-            <button>24 m</button>
-            <button>YTD</button>
-            <button>2025 vs 2026</button>
+            {[
+              { k: "6m",  l: "6 m" },
+              { k: "12m", l: "12 m" },
+              { k: "24m", l: "24 m" },
+              { k: "YTD", l: "YTD" },
+              { k: "cmp", l: "2025 vs 2026" },
+            ].map(p => (
+              <button key={p.k}
+                      className={period === p.k ? "active" : ""}
+                      onClick={() => setPeriod(p.k)}>
+                {p.l}
+              </button>
+            ))}
           </div>
           <button className="ev-btn">
-            <IcCalendar size={14}/>Mai 2025 → Mai 2026 <IcChevDn size={12}/>
+            <IcCalendar size={14}/>
+            {period === "6m"  ? "Déc. 2025 → Mai 2026" :
+             period === "24m" ? "Mai 2024 → Mai 2026" :
+             period === "YTD" ? "Janv. → Mai 2026" :
+             "Mai 2025 → Mai 2026"}
+            <IcChevDn size={12}/>
           </button>
         </div>
       </div>
@@ -68,7 +91,7 @@ export default function Evolution() {
             <span><span style={{ width: 14, height: 0, borderTop: "1.5px dashed var(--ink-500)" }}/>Année précédente</span>
           </div>
         </div>
-        <EvolutionHeroChart months={MONTHLY} prev={previousYear}/>
+        <EvolutionHeroChart months={monthsToShow} prev={previousYear}/>
       </div>
 
       {/* BOTTOM — comparison + small multiples */}
