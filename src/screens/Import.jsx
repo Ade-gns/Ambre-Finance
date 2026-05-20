@@ -72,6 +72,27 @@ function parseAmt(raw) {
   return parseFloat(clean);
 }
 
+// Mapping des catégories bancaires vers les IDs Ambre
+const BANK_CAT_MAP = {
+  alim: ["alim", "course", "alimentation", "epicerie", "supermarch", "hypermarche"],
+  loy:  ["logement", "loyer"],
+  tra:  ["transport", "navigo", "vtc", "taxi", "parking", "stationnement", "auto", "peage"],
+  loi:  ["loisir", "restaurant", "bar", "cafe", "jeu", "voyage", "shopping", "vetement", "livraison", "achat"],
+  san:  ["sante", "pharma", "medecin", "sport", "salle", "fitness", "hygiene"],
+  abo:  ["abo", "streaming", "telephone", "internet", "mobile", "numerique"],
+  inc:  ["revenu", "salaire", "aide", "allocation", "caf"],
+  epa:  ["epargne", "livret", "pel", "cloture"],
+};
+
+function mapBankCat(raw) {
+  if (!raw) return null;
+  const n = raw.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  for (const [id, kws] of Object.entries(BANK_CAT_MAP)) {
+    if (kws.some(k => n.includes(k))) return id;
+  }
+  return null;
+}
+
 function parseCSV(rawText) {
   const text = rawText.replace(/^﻿/, ""); // strip BOM
   const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
@@ -86,19 +107,23 @@ function parseCSV(rawText) {
     const cells = parseCsvRow(lines[i], sep).map(norm);
     const hasDate = cells.some(c => c.includes("date") || c.includes("jour"));
     const hasAmt  = cells.some(c => c.includes("montant") || c.includes("amount") || c.includes("debit") || c.includes("credit") || c.includes("valeur") || c.includes("retrait"));
-    const hasLbl  = cells.some(c => c.includes("libel") || c.includes("descri") || c.includes("label") || c.includes("operation") || c.includes("intitule") || c.includes("wording") || c.includes("motif"));
+    const hasLbl  = cells.some(c => c.includes("libel") || c.includes("descri") || c.includes("label") || c.includes("intitule") || c.includes("wording") || c.includes("motif"));
     if ((hasDate && hasAmt) || (hasDate && hasLbl) || (hasLbl && hasAmt)) { headerIdx = i; break; }
   }
 
   const header = parseCsvRow(lines[headerIdx], sep).map(norm);
   const idx = (kws) => header.findIndex(c => kws.some(k => c.includes(k)));
 
-  const dateIdx = idx(["date op", "date val", "date", "jour"]);
-  const lblIdx  = idx(["libel", "descri", "label", "operation", "intitule", "wording", "motif", "reference"]);
-  const amtIdx  = idx(["montant", "amount", "somme", "valeur"]);
+  // "date_op" avant "date" pour préférer date_operation sur date_compta
+  // "operation" retiré de lblIdx car il matche "date_operation"
+  const dateIdx = idx(["date_op", "date op", "date_val", "date val", "date", "jour"]);
+  const lblIdx  = idx(["libel", "descri", "label", "intitule", "wording", "motif"]);
+  const amtIdx  = idx(["montant", "amount", "somme"]);
   const debIdx  = idx(["debit", "retrait", "depit"]);
   const credIdx = idx(["credit", "versement", "depot"]);
-  const subIdx  = idx(["detail", "info", "complement", "categorie", "communication"]);
+  const catIdx  = idx(["categorie", "category"]);
+  // "type" avant "detail" : couvre la colonne "type" des exports bancaires (Carte bancaire, Prélèvement…)
+  const subIdx  = idx(["type", "detail", "info", "complement", "communication"]);
 
   if (dateIdx === -1 && lblIdx === -1) return null;
 
@@ -126,12 +151,15 @@ function parseCSV(rawText) {
     }
     if (isNaN(amt) || amt === 0) continue;
 
+    const bankCat = catIdx !== -1 ? (cells[catIdx] || "").replace(/"/g, "").trim() : "";
+    const mappedCat = mapBankCat(bankCat);
+
     txs.push({
       d:    normalizeDate(cells[eDateIdx] || ""),
       lbl:  lbl || "—",
-      sub:  subIdx !== -1 ? (cells[subIdx] || "").replace(/"/g, "").trim() : "",
-      cat:  null,
-      conf: "none",
+      sub:  subIdx !== -1 ? (cells[subIdx] || "").replace(/"/g, "").trim() : bankCat,
+      cat:  mappedCat,
+      conf: mappedCat ? "high" : "none",
       amt,
     });
   }
