@@ -14,7 +14,9 @@ import {
 } from "../lib/icons";
 
 /* ─────────────────────────────────────────────────────────────────
-   Parser CSV générique (séparateur ; ou ,  — gère les champs quotés)
+   Parser CSV générique — séparateurs ; , \t |  — gère les champs
+   quotés, le BOM UTF-8, les métadonnées en tête de fichier et les
+   montants avec espace comme séparateur de milliers.
    ───────────────────────────────────────────────────────────────── */
 function parseCsvRow(row, sep) {
   const cells = [];
@@ -30,30 +32,73 @@ function parseCsvRow(row, sep) {
   return cells;
 }
 
+function detectSeparator(line) {
+  const candidates = [";", "\t", "|", ","];
+  let best = ","; let bestCount = 0;
+  for (const c of candidates) {
+    const count = (line.match(new RegExp(c === "|" ? "\\|" : c, "g")) || []).length;
+    if (count > bestCount) { best = c; bestCount = count; }
+  }
+  return best;
+}
+
 function normalizeDate(raw) {
-  let d = raw.replace(/-/g, "/").trim();
+  const MONTHS_FR = ["jan","fev","mar","avr","mai","jun","jul","aou","sep","oct","nov","dec"];
+  const MONTHS_EN = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+  let d = raw.replace(/[.\-]/g, "/").trim();
   const curYear = new Date().getFullYear();
   if (/^\d{4}\/\d{2}\/\d{2}$/.test(d)) return d.slice(8) + "/" + d.slice(5, 7) + "/" + d.slice(0, 4);
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(d)) return d;
   if (/^\d{2}\/\d{2}\/\d{2}$/.test(d)) return d.slice(0, 6) + "20" + d.slice(6);
   if (/^\d{2}\/\d{2}$/.test(d))        return d + "/" + curYear;
+  // "20 Jan 2026" / "20-Jan-2026"
+  const m = raw.match(/^(\d{1,2})[\s\-/]([a-zA-Zéûô]{3,})[\s\-/](\d{2,4})$/i);
+  if (m) {
+    const mon = m[2].toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").slice(0, 3);
+    const mi  = MONTHS_FR.indexOf(mon) !== -1 ? MONTHS_FR.indexOf(mon) : MONTHS_EN.indexOf(mon);
+    if (mi !== -1) {
+      const yr = m[3].length === 2 ? "20" + m[3] : m[3];
+      return String(m[1]).padStart(2, "0") + "/" + String(mi + 1).padStart(2, "0") + "/" + yr;
+    }
+  }
   return d;
 }
 
-function parseCSV(text) {
+const SKIP_LABELS = /^(solde|total|balance|report|a nouveau|cumul|sous.total)/i;
+
+function parseAmt(raw) {
+  if (!raw) return NaN;
+  const clean = raw.trim().replace(/\s/g, "").replace(/,/g, ".").replace(/[^0-9.\-+]/g, "");
+  return parseFloat(clean);
+}
+
+function parseCSV(rawText) {
+  const text = rawText.replace(/^﻿/, ""); // strip BOM
   const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return null;
-  const sep = (text.match(/;/g) || []).length > (text.match(/,/g) || []).length ? ";" : ",";
-  const normalize = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-  const header = parseCsvRow(lines[0], sep).map(c => normalize(c.replace(/"/g, "")));
 
-  const idx = (keywords) => header.findIndex(c => keywords.some(k => c.includes(k)));
-  const dateIdx = idx(["date", "jour"]);
-  const lblIdx  = idx(["libel", "descri", "label", "operation", "intitule"]);
-  const amtIdx  = idx(["montant", "amount", "somme"]);
-  const debIdx  = idx(["debit"]);
-  const credIdx = idx(["credit"]);
-  const subIdx  = idx(["detail", "info", "complement", "categorie", "reference"]);
+  const sep = detectSeparator(lines[0]);
+  const norm = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/"/g, "").trim();
+
+  // Trouver la ligne d'en-tête réelle (sauter les métadonnées bancaires)
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(lines.length - 1, 10); i++) {
+    const cells = parseCsvRow(lines[i], sep).map(norm);
+    const hasDate = cells.some(c => c.includes("date") || c.includes("jour"));
+    const hasAmt  = cells.some(c => c.includes("montant") || c.includes("amount") || c.includes("debit") || c.includes("credit") || c.includes("valeur") || c.includes("retrait"));
+    const hasLbl  = cells.some(c => c.includes("libel") || c.includes("descri") || c.includes("label") || c.includes("operation") || c.includes("intitule") || c.includes("wording") || c.includes("motif"));
+    if ((hasDate && hasAmt) || (hasDate && hasLbl) || (hasLbl && hasAmt)) { headerIdx = i; break; }
+  }
+
+  const header = parseCsvRow(lines[headerIdx], sep).map(norm);
+  const idx = (kws) => header.findIndex(c => kws.some(k => c.includes(k)));
+
+  const dateIdx = idx(["date op", "date val", "date", "jour"]);
+  const lblIdx  = idx(["libel", "descri", "label", "operation", "intitule", "wording", "motif", "reference"]);
+  const amtIdx  = idx(["montant", "amount", "somme", "valeur"]);
+  const debIdx  = idx(["debit", "retrait", "depit"]);
+  const credIdx = idx(["credit", "versement", "depot"]);
+  const subIdx  = idx(["detail", "info", "complement", "categorie", "communication"]);
 
   if (dateIdx === -1 && lblIdx === -1) return null;
 
@@ -61,25 +106,30 @@ function parseCSV(text) {
   const eLblIdx  = lblIdx  !== -1 ? lblIdx  : 1;
 
   const txs = [];
-  for (let i = 1; i < lines.length; i++) {
+  for (let i = headerIdx + 1; i < lines.length; i++) {
     const cells = parseCsvRow(lines[i], sep);
     if (cells.length < 2) continue;
+    const lbl = (cells[eLblIdx] || "").replace(/"/g, "").trim();
+    if (SKIP_LABELS.test(lbl)) continue; // ignorer lignes de solde / totaux
 
-    let amt = 0;
+    let amt = NaN;
     if (amtIdx !== -1) {
-      const raw = (cells[amtIdx] || "").replace(/\s/g, "").replace(",", ".").replace(/[^0-9.\-+]/g, "");
-      amt = parseFloat(raw) || 0;
+      amt = parseAmt(cells[amtIdx]);
     } else if (debIdx !== -1 || credIdx !== -1) {
-      const deb  = debIdx  !== -1 ? parseFloat((cells[debIdx]  || "").replace(",", ".").replace(/[^0-9.]/g, "")) || 0 : 0;
-      const cred = credIdx !== -1 ? parseFloat((cells[credIdx] || "").replace(",", ".").replace(/[^0-9.]/g, "")) || 0 : 0;
-      amt = cred > 0 ? cred : -deb;
+      const deb  = debIdx  !== -1 ? parseAmt(cells[debIdx])  : NaN;
+      const cred = credIdx !== -1 ? parseAmt(cells[credIdx]) : NaN;
+      const dv = isNaN(deb)  ? 0 : deb;
+      const cv = isNaN(cred) ? 0 : cred;
+      if (cv > 0) amt = cv;
+      else if (dv > 0) amt = -dv;
+      else if (!isNaN(deb) && dv < 0) amt = dv;
     }
     if (isNaN(amt) || amt === 0) continue;
 
     txs.push({
       d:    normalizeDate(cells[eDateIdx] || ""),
-      lbl:  (cells[eLblIdx] || "—").replace(/"/g, ""),
-      sub:  subIdx !== -1 ? (cells[subIdx] || "").replace(/"/g, "") : "",
+      lbl:  lbl || "—",
+      sub:  subIdx !== -1 ? (cells[subIdx] || "").replace(/"/g, "").trim() : "",
       cat:  null,
       conf: "none",
       amt,
@@ -114,22 +164,31 @@ export default function Import() {
     const ext = file.name.split(".").pop().toLowerCase();
 
     if (ext === "csv" || ext === "txt") {
-      const reader = new FileReader();
-      reader.onload = e => {
-        const txs = parseCSV(e.target.result);
-        if (txs && txs.length > 0) {
-          setParsedTxs(txs);
-          setState("preview");
-        } else {
-          setParseError("Format CSV non reconnu ou fichier vide. Vérifiez que le fichier contient une ligne d'en-tête avec les colonnes Date, Libellé et Montant.");
+      const readAs = (encoding) => new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload  = e => resolve(e.target.result);
+        r.onerror = () => reject(new Error("Lecture impossible"));
+        r.readAsText(file, encoding);
+      });
+      (async () => {
+        try {
+          let text = await readAs("UTF-8");
+          // Si le fichier n'est pas en UTF-8 (ex : ISO-8859-1 courant chez les banques
+          // françaises), on obtient des caractères de remplacement U+FFFD — on réessaie.
+          if (text.includes("�")) text = await readAs("ISO-8859-1");
+          const txs = parseCSV(text);
+          if (txs && txs.length > 0) {
+            setParsedTxs(txs);
+            setState("preview");
+          } else {
+            setParseError("Format CSV non reconnu ou fichier vide. Vérifiez que le fichier contient une ligne d'en-tête avec les colonnes Date, Libellé et Montant.");
+            setState("error");
+          }
+        } catch {
+          setParseError("Impossible de lire le fichier.");
           setState("error");
         }
-      };
-      reader.onerror = () => {
-        setParseError("Impossible de lire le fichier.");
-        setState("error");
-      };
-      reader.readAsText(file, "UTF-8");
+      })();
     } else if (ext === "pdf" || ext === "ofx" || ext === "qif") {
       setParseError(`La lecture des fichiers .${ext} nécessite le moteur Rust (en développement). Exportez un CSV depuis votre espace bancaire en attendant.`);
       setState("error");
