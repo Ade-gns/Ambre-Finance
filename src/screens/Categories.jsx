@@ -5,7 +5,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { CATEGORIES, TRANSACTIONS } from "../data/mockData";
+import { useTransactions, useCategories, computeCatTotals, DEFAULT_CATS } from "../lib/store";
 import { fmtEUR, pathSmooth } from "../lib/chartPrimitives";
 import {
   IcSearch, IcCalendar, IcFilter, IcArrowR, IcChevDn,
@@ -22,32 +22,37 @@ const CAT_ICON_LIST = [
   { key: "chart",  el: s => <IcChart size={s}/> },
 ];
 
-const ALL_CATS = [
-  ...CATEGORIES.map(c => ({ ...c })),
-  { id: "epa", label: "Épargne",     color: "#9d8b73", amount: 300.00, share: 0.10, desc: "Épargne et placements" },
-  { id: "fou", label: "Restaurants", color: "#a85a48", amount: 68.50,  share: 0.04, desc: "Restaurants et snacks" },
-  { id: "edu", label: "Éducation",   color: "#7a5c3a", amount: 0,      share: 0,    desc: "Frais de scolarité, livres, cours en ligne, abonnements éducatifs" },
-];
-
 export default function Categories() {
+  const [transactions] = useTransactions();
+  const [categories, setCategories] = useCategories();
   const [view, setView]                   = useState("manage"); // manage | detail | empty
-  const [selectedCatId, setSelectedCatId] = useState("alim");
+  const [selectedCatId, setSelectedCatId] = useState(() => categories[0]?.id || "alim");
 
-  const selectedCat = ALL_CATS.find(c => c.id === selectedCatId) ?? ALL_CATS[0];
+  const catTotals = computeCatTotals(transactions, categories, null);
+  const catTotalsMap = Object.fromEntries(catTotals.map(c => [c.id, c]));
+
+  // Merge amounts into categories for display
+  const catsWithAmounts = categories.map(c => ({
+    ...c,
+    amount: catTotalsMap[c.id]?.amount || 0,
+    share:  catTotalsMap[c.id]?.share  || 0,
+  }));
+
+  const selectedCat = catsWithAmounts.find(c => c.id === selectedCatId) ?? catsWithAmounts[0];
 
   return (
     <>
       {view === "manage" && (
         <CatManage
           selectedCatId={selectedCatId}
-          onSelectCat={id => {
-            setSelectedCatId(id);
-          }}
+          onSelectCat={id => setSelectedCatId(id)}
           onSeeDetail={() => setView("detail")}
           onSeeEmpty={() => setView("empty")}
+          catsWithAmounts={catsWithAmounts}
+          setCategories={setCategories}
         />
       )}
-      {view === "detail" && <CatDetail cat={selectedCat} onBack={() => setView("manage")} />}
+      {view === "detail" && <CatDetail cat={selectedCat} transactions={transactions} onBack={() => setView("manage")} />}
       {view === "empty"  && <CatEmpty  cat={selectedCat} onBack={() => setView("manage")} />}
     </>
   );
@@ -72,8 +77,7 @@ function exportCatsCSV(cats) {
 /* ─────────────────────────────────────────────────────────────────
    Vue 1 — Gestion des catégories (liste + édition + règles)
    ───────────────────────────────────────────────────────────────── */
-function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty }) {
-  const [userCats, setUserCats]   = useState([]);
+function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWithAmounts = [], setCategories }) {
   const [deletedIds, setDeletedIds] = useState(new Set());
   const [newOpen, setNewOpen]     = useState(false);
   const [newName, setNewName]     = useState("");
@@ -129,7 +133,7 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty }) {
     return () => document.removeEventListener("mousedown", fn);
   }, [ioOpen]);
 
-  const allCats = [...ALL_CATS, ...userCats]
+  const allCats = catsWithAmounts
     .filter(c => !deletedIds.has(c.id))
     .map(c => ({ ...c, ...(catEdits[c.id] || {}) }))
     .filter(c => !catSearch || c.label.toLowerCase().includes(catSearch.toLowerCase()))
@@ -143,13 +147,15 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty }) {
   const deleteCat = id => {
     const next = allCats.find(c => c.id !== id);
     setDeletedIds(prev => new Set([...prev, id]));
+    if (setCategories) setCategories(prev => prev.filter(c => c.id !== id));
     if (next) onSelectCat(next.id);
   };
 
   const createCat = () => {
     if (!newName.trim()) return;
     const id = "usr_" + Date.now();
-    setUserCats(prev => [...prev, { id, label: newName.trim(), color: newColor, amount: 0, share: 0, desc: "" }]);
+    const newCat = { id, label: newName.trim(), color: newColor, budget: 0, iconIdx: 0, amount: 0, share: 0, desc: "" };
+    if (setCategories) setCategories(prev => [...prev, newCat]);
     onSelectCat(id);
     setNewName("");
     setNewColor("#b8693d");
@@ -610,7 +616,7 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty }) {
 /* ─────────────────────────────────────────────────────────────────
    Vue 2 — Détail d'une catégorie (drill-down)
    ───────────────────────────────────────────────────────────────── */
-function CatDetail({ cat, onBack }) {
+function CatDetail({ cat, transactions = [], onBack }) {
   const navigate = useNavigate();
   const [period, setPeriod]           = useState("12 m");
   const [catMonth, setCatMonth]       = useState("Mai 2026");
@@ -645,8 +651,8 @@ function CatDetail({ cat, onBack }) {
     { name: "Le Petit Café",      n: 3, sum:  14.20 },
   ];
 
-  const txInCat = TRANSACTIONS.filter(t => t.cat === cat.id);
-  const txDisplay = (txInCat.length > 0 ? txInCat : TRANSACTIONS).slice(0, 8);
+  const txInCat = transactions.filter(t => t.cat === cat.id);
+  const txDisplay = txInCat.slice(0, 8);
 
   return (
     <main className="cd-main">
@@ -803,11 +809,15 @@ function CatDetail({ cat, onBack }) {
             </button>
           </div>
           <div style={{ flex: 1, overflow: "hidden" }}>
-            {txDisplay.map((t, i) => (
+            {txDisplay.length === 0 ? (
+              <div style={{ padding: "16px 0", textAlign: "center", color: "var(--ink-500)", fontSize: 12 }}>
+                Aucune transaction dans cette catégorie.
+              </div>
+            ) : txDisplay.map((t, i) => (
               <div key={i} className="cd-tx-row">
-                <span className="cd-tx-date">{t.d}</span>
+                <span className="cd-tx-date">{t.d?.slice(0, 5) || t.d}</span>
                 <div>
-                  <div style={{ fontSize: 12.5, color: "var(--ink-800)" }}>{t.label}</div>
+                  <div style={{ fontSize: 12.5, color: "var(--ink-800)" }}>{t.lbl || t.label}</div>
                   <div style={{ fontSize: 10, color: "var(--ink-500)", fontFamily: "var(--font-mono)" }}>{t.mode}</div>
                 </div>
                 <span className="cd-tx-amt">{fmtEUR(t.amt, 2)}</span>

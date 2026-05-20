@@ -3,8 +3,9 @@
 // Tous les autres écrans utilisent le Layout standard avec sidebar.
 
 import { useState, useEffect } from "react";
-import { HashRouter, Routes, Route } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { load } from "./lib/storage";
+import { useTransactions } from "./lib/store";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./screens/Dashboard";
 import Import from "./screens/Import";
@@ -66,21 +67,33 @@ function MainLayout({ children }) {
   );
 }
 
+function DataGuard({ children }) {
+  const [transactions] = useTransactions();
+  if (!transactions || transactions.length === 0) return <Navigate to="/onboarding" replace />;
+  return children;
+}
+
+function OnboardingRoute() {
+  const [transactions] = useTransactions();
+  if (transactions && transactions.length > 0) return <Navigate to="/" replace />;
+  return <Onboarding />;
+}
+
 export default function App() {
   return (
     <HashRouter>
       <ThemeWatcher />
       <Routes>
         {/* Route plein écran — pas de sidebar */}
-        <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/onboarding" element={<OnboardingRoute />} />
 
         {/* Routes standard — avec sidebar */}
-        <Route path="/" element={<MainLayout><Dashboard /></MainLayout>} />
+        <Route path="/" element={<DataGuard><MainLayout><Dashboard /></MainLayout></DataGuard>} />
         <Route path="/import" element={<MainLayout><Import /></MainLayout>} />
-        <Route path="/transactions" element={<MainLayout><Transactions /></MainLayout>} />
-        <Route path="/categories" element={<MainLayout><Categories /></MainLayout>} />
-        <Route path="/evolution" element={<MainLayout><Evolution /></MainLayout>} />
-        <Route path="/alerts" element={<MainLayout><Alerts /></MainLayout>} />
+        <Route path="/transactions" element={<DataGuard><MainLayout><Transactions /></MainLayout></DataGuard>} />
+        <Route path="/categories" element={<DataGuard><MainLayout><Categories /></MainLayout></DataGuard>} />
+        <Route path="/evolution" element={<DataGuard><MainLayout><Evolution /></MainLayout></DataGuard>} />
+        <Route path="/alerts" element={<DataGuard><MainLayout><Alerts /></MainLayout></DataGuard>} />
         <Route path="/settings" element={<MainLayout><Settings /></MainLayout>} />
       </Routes>
     </HashRouter>

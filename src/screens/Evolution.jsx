@@ -4,11 +4,15 @@
    - Small multiples : un sparkline par catégorie */
 
 import { useState, useRef, useEffect } from "react";
-import { CATEGORIES, MONTHLY } from "../data/mockData";
+import { useTransactions, useCategories, computeMonthly, computeCatTotals } from "../lib/store";
 import { fmtEUR, pathSmooth, Sparkline } from "../lib/chartPrimitives";
 import { IcCalendar, IcChevDn } from "../lib/icons";
 
 export default function Evolution() {
+  const [transactions] = useTransactions();
+  const [categories]   = useCategories();
+  const monthly        = computeMonthly(transactions); // oldest→newest [{key, m, exp, inc}]
+
   const [period, setPeriod] = useState("12m"); // 6m | 12m | 24m | YTD | cmp
   const [catView, setCatView] = useState("monthly"); // "monthly" | "cumul"
   const [dateOpen, setDateOpen] = useState(false);
@@ -19,34 +23,44 @@ export default function Evolution() {
     document.addEventListener("mousedown", fn);
     return () => document.removeEventListener("mousedown", fn);
   }, [dateOpen]);
+
   const PERIODS = [
-    { k: "6m",  label: "6 derniers mois",  range: "Déc. 2025 → Mai 2026" },
-    { k: "12m", label: "12 derniers mois", range: "Mai 2025 → Mai 2026" },
-    { k: "24m", label: "24 derniers mois", range: "Mai 2024 → Mai 2026" },
-    { k: "YTD", label: "Depuis janvier",   range: "Janv. → Mai 2026" },
-    { k: "cmp", label: "2025 vs 2026",     range: "Mai 2025 → Mai 2026" },
+    { k: "6m",  label: "6 derniers mois",  range: "6 derniers mois" },
+    { k: "12m", label: "12 derniers mois", range: "12 derniers mois" },
+    { k: "24m", label: "24 derniers mois", range: "24 derniers mois" },
+    { k: "YTD", label: "Depuis janvier",   range: "Depuis janvier" },
+    { k: "cmp", label: "Comparaison",      range: "Toutes les données" },
   ];
 
-  // Détermine combien de mois afficher selon la période
-  // (avec MONTHLY qui contient 12 mois mockés, on simule en tronquant ou en répétant)
-  const monthsToShow = period === "6m" ? MONTHLY.slice(-6)
-                     : period === "24m" ? [...MONTHLY, ...MONTHLY]  // simulation : double les mois
-                     : period === "YTD" ? MONTHLY.slice(-5)         // jan→mai
-                     : MONTHLY;                                      // 12m ou cmp
+  const curYear = new Date().getFullYear();
+  const monthsToShow = period === "6m"  ? monthly.slice(-6)
+                     : period === "24m" ? monthly.slice(-24)
+                     : period === "YTD" ? monthly.filter(m => m.key && parseInt(m.key.split("/")[1], 10) === curYear)
+                     : monthly.slice(-12); // 12m ou cmp
 
-  // Année précédente (faked à partir des mois affichés)
-  const previousYear = monthsToShow.map((m, i) => ({
-    ...m,
-    exp: m.exp * (0.85 + Math.abs(Math.sin(i * 1.3)) * 0.1)
-  }));
+  // Année précédente estimée (offset de ~12 mois dans les données si disponible)
+  const previousYear = monthsToShow.map((m, i) => {
+    const pastIdx = monthly.indexOf(m) - 12;
+    return pastIdx >= 0 ? monthly[pastIdx] : { ...m, exp: m.exp * 0.92 };
+  });
 
-  // Séries par catégorie sur 12 mois (variance basée sur l'id)
-  const catSeries = CATEGORIES.map(c => ({
-    ...c,
-    values: MONTHLY.map((_, i) =>
-      c.amount * (0.7 + Math.abs(Math.sin(i * 0.8 + c.id.charCodeAt(0))) * 0.6)
-    )
-  }));
+  // Séries par catégorie sur les mois affichés
+  const catSeries = categories
+    .filter(c => c.id !== "inc")
+    .map(c => ({
+      ...c,
+      values: monthsToShow.map(m => {
+        const txsInMonth = transactions.filter(t => {
+          if (!t.d) return false;
+          const p = t.d.split("/");
+          if (p.length < 3) return false;
+          const key = p[1].padStart(2, "0") + "/" + (p[2].length === 2 ? "20" + p[2] : p[2]);
+          return key === m.key && t.cat === c.id && t.amt < 0;
+        });
+        return txsInMonth.reduce((s, t) => s + Math.abs(t.amt), 0);
+      })
+    }))
+    .filter(c => c.values.some(v => v > 0));
 
   const totalExp = monthsToShow.reduce((s, m) => s + m.exp, 0);
   const totalInc = monthsToShow.reduce((s, m) => s + m.inc, 0);

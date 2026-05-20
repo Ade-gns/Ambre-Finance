@@ -6,44 +6,38 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { CATEGORIES } from "../data/mockData";
+import { useTransactions, useCategories, parseTxDate, txMonthKey, txMonths, monthKeyLabel } from "../lib/store";
 import { fmtEUR } from "../lib/chartPrimitives";
 import {
   IcSearch, IcCalendar, IcFilter, IcArrowDn, IcChevDn,
   IcPlus, IcTag, IcUpload
 } from "../lib/icons";
 
-/* ─────────────────────────────────────────────────────────────────
-   Données enrichies pour la liste (mock — viendront de SQLite plus tard)
-   ───────────────────────────────────────────────────────────────── */
-const TX_LIST = [
-  // Semaine du 12 mai
-  { d: "14/05", dow: "Mer", lbl: "Carrefour Market",      sub: "Rue Saint-Honoré · Paris", acc: "BNP", cat: "alim", mode: "CB",          amt: -52.34, tags: ["récurrent"] },
-  { d: "14/05", dow: "Mer", lbl: "Uber",                  sub: "Trajet Bastille→Bercy",    acc: "BNP", cat: "tra",  mode: "CB",          amt: -12.80 },
-  { d: "13/05", dow: "Mar", lbl: "Loyer — Mai",           sub: "SCI Pradier",              acc: "BNP", cat: "loy",  mode: "Virement",    amt: -920.00, tags: ["récurrent"] },
-  { d: "12/05", dow: "Lun", lbl: "Salaire",               sub: "Dupont SAS",               acc: "BNP", cat: "inc",  mode: "Virement",    amt: +2560.00, tags: ["récurrent"] },
-  { d: "12/05", dow: "Lun", lbl: "Spotify Premium",       sub: "Abonnement mensuel",       acc: "BNP", cat: "abo",  mode: "Préautorisé", amt: -10.99, tags: ["récurrent"] },
-  // Semaine du 5 mai
-  { d: "11/05", dow: "Dim", lbl: "SNCF — Paris ↔ Lyon",   sub: "TGV inOui",                acc: "BNP", cat: "tra",  mode: "CB",          amt: -67.00 },
-  { d: "11/05", dow: "Dim", lbl: "FNAC.COM",              sub: "Commande #FN-203984",      acc: "BNP", cat: "loi",  mode: "CB",          amt: -29.90 },
-  { d: "10/05", dow: "Sam", lbl: "Boulangerie Pichon",    sub: "Quartier latin",           acc: "BNP", cat: "alim", mode: "CB",          amt: -8.40 },
-  { d: "10/05", dow: "Sam", lbl: "Le Petit Café",         sub: "Rue Mouffetard",           acc: "BNP", cat: "loi",  mode: "CB",          amt: -14.20 },
-  { d: "09/05", dow: "Ven", lbl: "Pharmacie de l'Hôtel",  sub: "Sénac · ordonnance",       acc: "BNP", cat: "san",  mode: "CB",          amt: -22.50 },
-  { d: "08/05", dow: "Jeu", lbl: "Total Énergies",        sub: "Station Bercy",            acc: "BNP", cat: "tra",  mode: "CB",          amt: -48.10 },
-  { d: "07/05", dow: "Mer", lbl: "Monoprix",              sub: "Rue Dampierre",            acc: "BNP", cat: "alim", mode: "CB",          amt: -39.85 },
-  { d: "06/05", dow: "Mar", lbl: "Netflix",               sub: "Standard sans pub",        acc: "BNP", cat: "abo",  mode: "Préautorisé", amt: -13.49, tags: ["récurrent"] },
-  // Semaine du 28 avril
-  { d: "05/05", dow: "Lun", lbl: "Auchan Drive",          sub: "Courses semaine",          acc: "BNP", cat: "alim", mode: "CB",          amt: -82.40 },
-  { d: "04/05", dow: "Dim", lbl: "Cinéma MK2",            sub: "Bibliothèque",             acc: "BNP", cat: "loi",  mode: "CB",          amt: -22.00 },
-  { d: "03/05", dow: "Sam", lbl: "Livret A — Versement",  sub: "Virement interne",         acc: "LBP", cat: "epa",  mode: "Virement",    amt: -300.00 },
-  { d: "02/05", dow: "Ven", lbl: "Restaurant Le Pic",     sub: "Déjeuner",                 acc: "BNP", cat: "alim", mode: "CB",          amt: -34.50 },
-  { d: "01/05", dow: "Jeu", lbl: "1er mai — Marché",      sub: "Place Monge",              acc: "BNP", cat: "alim", mode: "Espèces",     amt: -18.00 },
-];
+const MONTHS_SHORT_TX = ["","janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
 
-const TX_FILTERS = [
-  { id: "alim", label: "Alimentation", color: "#b8693d" },
-  { id: "tra",  label: "Transports",   color: "#6b7a4f" },
-];
+function getWeekGroups(txs) {
+  const sorted = [...txs].sort((a, b) => {
+    const da = parseTxDate(a.d), db = parseTxDate(b.d);
+    return (db?.getTime() || 0) - (da?.getTime() || 0);
+  });
+  const groupMap = {};
+  const groupOrder = [];
+  sorted.forEach(t => {
+    const date = parseTxDate(t.d);
+    if (!date) return;
+    const monday = new Date(date);
+    const diff = date.getDay() === 0 ? -6 : 1 - date.getDay();
+    monday.setDate(date.getDate() + diff);
+    const key = monday.toISOString().slice(0, 10);
+    if (!groupMap[key]) {
+      const label = `Semaine du ${monday.getDate()} ${MONTHS_SHORT_TX[monday.getMonth() + 1]}`;
+      groupMap[key] = { key, label, txs: [] };
+      groupOrder.push(key);
+    }
+    groupMap[key].txs.push(t);
+  });
+  return groupOrder.map(k => groupMap[k]);
+}
 
 function exportTxCSV(txs, filename = "transactions.csv") {
   const header = "Date,Libellé,Sous-titre,Compte,Catégorie,Mode,Montant";
@@ -60,10 +54,10 @@ function exportTxCSV(txs, filename = "transactions.csv") {
   document.body.removeChild(a);
 }
 
-function txCatStyle(cat) {
+function txCatStyle(cat, catDefs = []) {
   if (cat === "inc") return { color: "#6b7a4f", label: "Revenus" };
-  if (cat === "epa") return { color: "#9d8b73", label: "Épargne" };
-  const c = CATEGORIES.find(x => x.id === cat);
+  if (cat === "epa") return { color: "#7a5c3a", label: "Épargne" };
+  const c = catDefs.find(x => x.id === cat);
   return c ? { color: c.color, label: c.label } : { color: "#9d8b73", label: "Autre" };
 }
 
@@ -132,7 +126,8 @@ function TxFilterBar({ withChips = true, filter = "all", onChangeFilter = () => 
                        search = "", onSearch = () => {},
                        catSel = [], onCatSelChange = () => {},
                        month = "Mai 2026", onMonthChange = () => {},
-                       sortDir = "desc", onSortDir = () => {} }) {
+                       sortDir = "desc", onSortDir = () => {},
+                       monthsOpt = [], catOpt = [] }) {
   const segs = [
     { key: "all", label: "Tout",       n: counts.all },
     { key: "exp", label: "Dépenses",   n: counts.exp },
@@ -155,15 +150,6 @@ function TxFilterBar({ withChips = true, filter = "all", onChangeFilter = () => 
     document.addEventListener("mousedown", fn);
     return () => document.removeEventListener("mousedown", fn);
   }, [filtersOpen]);
-  const MONTHS_OPT = ["Mai 2026","Avril 2026","Mars 2026","Février 2026","Janvier 2026","Décembre 2025","Novembre 2025","Octobre 2025"];
-  const CAT_OPT = [
-    { id: "alim", label: "Alimentation", color: "#b8693d" },
-    { id: "loy",  label: "Logement",     color: "#3d2817" },
-    { id: "tra",  label: "Transports",   color: "#6b7a4f" },
-    { id: "loi",  label: "Loisirs",      color: "#a85a48" },
-    { id: "san",  label: "Santé",        color: "#9d8b73" },
-    { id: "abo",  label: "Abonnements",  color: "#cd8459" },
-  ];
   return (
     <>
       <div className="tx-toolbar">
@@ -199,7 +185,7 @@ function TxFilterBar({ withChips = true, filter = "all", onChangeFilter = () => 
               borderRadius: 10, boxShadow: "0 8px 24px var(--shadow-soft)",
               minWidth: 180, overflow: "hidden",
             }}>
-              {MONTHS_OPT.map(m => (
+              {monthsOpt.map(m => (
                 <button key={m} style={{
                   display: "block", width: "100%", padding: "9px 16px",
                   background: m === month ? "var(--amber-100)" : "none",
@@ -225,7 +211,7 @@ function TxFilterBar({ withChips = true, filter = "all", onChangeFilter = () => 
             }}>
               <div style={{ fontSize: 10, color: "var(--ink-500)", letterSpacing: "0.08em",
                             textTransform: "uppercase", marginBottom: 10 }}>Catégories</div>
-              {CAT_OPT.map(c => (
+              {catOpt.map(c => (
                 <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 10,
                                             padding: "6px 0", cursor: "pointer", fontSize: 13 }}>
                   <input type="checkbox" checked={catSel.includes(c.id)}
@@ -257,7 +243,7 @@ function TxFilterBar({ withChips = true, filter = "all", onChangeFilter = () => 
         <div className="tx-chips">
           <span className="tx-chip-lbl">Filtres actifs</span>
           {catSel.map(id => {
-            const cat = CAT_OPT.find(c => c.id === id);
+            const cat = catOpt.find(c => c.id === id);
             if (!cat) return null;
             return (
               <span key={id} className="tx-chip" style={{ borderColor: cat.color + "55", color: cat.color }}>
@@ -289,17 +275,28 @@ function TxFilterBar({ withChips = true, filter = "all", onChangeFilter = () => 
 function TxSummary() {
   return (
     <div className="tx-summary">
-      <span><strong>18 transactions</strong> · mai 2026</span>
-      <span>Débit · <strong className="mono" style={{ color: "var(--rose-500)" }}>−1 696,47 €</strong></span>
-      <span>Crédit · <strong className="mono" style={{ color: "var(--sage-500)" }}>+2 560,00 €</strong></span>
-      <span>Moyenne · <strong className="mono">42 €</strong></span>
-      <span style={{ marginLeft: "auto", color: "var(--ink-500)" }}>Dernière sync · il y a 2 min</span>
+      <span style={{ color: "var(--ink-500)" }}>Résumé de la période</span>
     </div>
   );
 }
 
-function TxRow({ t, selected, bulk, dense, onClick, onCheckboxClick }) {
-  const cat = txCatStyle(t.cat);
+function TxSummaryReal({ txs = [], month = "", allCount = 0 }) {
+  const debit  = txs.filter(t => t.amt < 0).reduce((s, t) => s + t.amt, 0);
+  const credit = txs.filter(t => t.amt > 0).reduce((s, t) => s + t.amt, 0);
+  const expTxs = txs.filter(t => t.amt < 0);
+  const avg = expTxs.length > 0 ? Math.abs(debit) / expTxs.length : 0;
+  return (
+    <div className="tx-summary">
+      <span><strong>{txs.length} transactions</strong>{month ? " · " + month : ""}</span>
+      {debit !== 0 && <span>Débit · <strong className="mono" style={{ color: "var(--rose-500)" }}>{fmtEUR(debit, 2)}</strong></span>}
+      {credit !== 0 && <span>Crédit · <strong className="mono" style={{ color: "var(--sage-500)" }}>+{fmtEUR(credit, 2)}</strong></span>}
+      {avg > 0 && <span>Moyenne · <strong className="mono">{fmtEUR(avg, 0)}</strong></span>}
+    </div>
+  );
+}
+
+function TxRow({ t, selected, bulk, dense, onClick, onCheckboxClick, catDefs = [] }) {
+  const cat = txCatStyle(t.cat, catDefs);
   return (
     <div className={"tx-row" +
                     (selected ? " selected" : "") +
@@ -361,13 +358,27 @@ function TxTableHead() {
 const MONTH_NUM = { "Janvier":1,"Février":2,"Mars":3,"Avril":4,"Mai":5,"Juin":6,"Juillet":7,"Août":8,"Septembre":9,"Octobre":10,"Novembre":11,"Décembre":12 };
 
 function TxDefault({ onRowClick, onSelectMany }) {
+  const [allTxs]  = useTransactions();
+  const [catDefs] = useCategories();
+  const realMonths = txMonths(allTxs).map(k => monthKeyLabel(k));
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [catSel, setCatSel] = useState([]);
-  const [month, setMonth]   = useState("Mai 2026");
+  const [month, setMonth]   = useState(() => {
+    // Default to the latest month available
+    const sorted = [...allTxs].sort((a, b) => (b.d || "").localeCompare(a.d || ""));
+    if (sorted.length > 0 && sorted[0].d) {
+      const p = sorted[0].d.split("/");
+      if (p.length >= 3) {
+        const mNames = ["","Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+        const mName = mNames[parseInt(p[1], 10)];
+        if (mName) return mName + " " + p[2];
+      }
+    }
+    return "Mai 2026";
+  });
   const [sortDir, setSortDir] = useState("desc");
 
-  const allTxs = TX_LIST;
   const cExp = allTxs.filter(t => t.amt < 0 && t.cat !== "epa").length;
   const cInc = allTxs.filter(t => t.amt > 0).length;
   const cTr  = allTxs.filter(t => t.cat === "epa").length;
@@ -379,47 +390,51 @@ function TxDefault({ onRowClick, onSelectMany }) {
       : filter === "exp" ? t.amt < 0 && t.cat !== "epa"
       : filter === "inc" ? t.amt > 0
       : t.cat === "epa";
-    const matchSearch = !q || t.lbl.toLowerCase().includes(q) || t.sub.toLowerCase().includes(q);
+    const matchSearch = !q || (t.lbl || "").toLowerCase().includes(q) || (t.sub || "").toLowerCase().includes(q);
     const matchCat = catSel.length === 0 || catSel.includes(t.cat);
     const mNum = MONTH_NUM[month.split(" ")[0]];
-    const matchMonth = !mNum || parseInt(t.d.split("/")[1], 10) === mNum;
+    const mYear = month.split(" ")[1] ? parseInt(month.split(" ")[1], 10) : null;
+    const matchMonth = !mNum || (() => {
+      const p = (t.d || "").split("/");
+      if (p.length < 2) return false;
+      const tMonth = parseInt(p[1], 10);
+      const tYear  = p.length >= 3 ? parseInt(p[2], 10) : null;
+      return tMonth === mNum && (!mYear || !tYear || tYear === mYear);
+    })();
     return matchSeg && matchSearch && matchCat && matchMonth;
   };
 
-  const BASE_GROUPS = [
-    { label: "Cette semaine · 12 – 14 mai",         sum: -1043.93, rows: TX_LIST.slice(0, 5) },
-    { label: "Semaine du 5 mai · 5 – 11 mai",        sum: -253.34,  rows: TX_LIST.slice(5, 13) },
-    { label: "Semaine du 28 avr. · 28 avr. – 4 mai", sum: -456.90,  rows: TX_LIST.slice(13) },
-  ];
-  const groups = sortDir === "desc" ? BASE_GROUPS : [...BASE_GROUPS].reverse();
-
-  const filteredTotal = allTxs.filter(matchFilter).length;
+  const filtered = allTxs.filter(matchFilter);
+  const groups = getWeekGroups(filtered);
+  const sortedGroups = sortDir === "desc" ? groups : [...groups].reverse();
+  const filteredTotal = filtered.length;
 
   return (
     <main className="tx-main">
-      <TxHeader onExport={() => exportTxCSV(TX_LIST)} />
+      <TxHeader onExport={() => exportTxCSV(allTxs)} />
       <TxFilterBar filter={filter} onChangeFilter={setFilter} counts={counts}
                    search={search} onSearch={setSearch}
                    catSel={catSel} onCatSelChange={setCatSel}
                    month={month} onMonthChange={setMonth}
-                   sortDir={sortDir} onSortDir={setSortDir}/>
-      <TxSummary />
+                   sortDir={sortDir} onSortDir={setSortDir}
+                   monthsOpt={realMonths} catOpt={catDefs}/>
+      <TxSummaryReal txs={filtered} month={month} allCount={allTxs.length}/>
 
       <div className="tx-table">
         <TxTableHead />
         <div className="tx-tbody">
-          {groups.map((g, gi) => {
-            const filteredRows = g.rows.filter(matchFilter);
-            if (filteredRows.length === 0) return null;
+          {sortedGroups.map((g, gi) => {
+            if (g.txs.length === 0) return null;
+            const groupSum = g.txs.reduce((s, t) => s + t.amt, 0);
             return (
-              <div key={g.label}>
+              <div key={g.key}>
                 <div className="tx-group-h">
                   <span>{g.label}</span>
-                  <span className="sum">{g.sum > 0 ? "+" : ""}{fmtEUR(g.sum, 2)}</span>
+                  <span className="sum">{groupSum > 0 ? "+" : ""}{fmtEUR(groupSum, 2)}</span>
                 </div>
-                {filteredRows.map((t, i) => (
-                  <TxRow key={gi + "-" + i} t={t} onClick={() => onRowClick(t)}
-                         onCheckboxClick={() => onSelectMany(TX_LIST.indexOf(t))}/>
+                {g.txs.map((t, i) => (
+                  <TxRow key={gi + "-" + i} t={t} catDefs={catDefs} onClick={() => onRowClick(t)}
+                         onCheckboxClick={() => onSelectMany(allTxs.indexOf(t))}/>
                 ))}
               </div>
             );
@@ -427,9 +442,11 @@ function TxDefault({ onRowClick, onSelectMany }) {
           {filteredTotal === 0 && (
             <div style={{ padding: "40px 24px", textAlign: "center",
                           color: "var(--ink-500)", fontSize: 13 }}>
-              Aucune transaction ne correspond à « {search} ».
-              <span style={{ color: "var(--amber-500)", cursor: "pointer", marginLeft: 8 }}
-                    onClick={() => setSearch("")}>Effacer</span>
+              {search
+                ? <>Aucune transaction ne correspond à « {search} ».
+                    <span style={{ color: "var(--amber-500)", cursor: "pointer", marginLeft: 8 }}
+                          onClick={() => setSearch("")}>Effacer</span></>
+                : "Aucune transaction pour ce mois."}
             </div>
           )}
         </div>
@@ -452,25 +469,51 @@ function TxDefault({ onRowClick, onSelectMany }) {
   );
 }
 
+/* Sous-composant pour la liste dans TxDetail (nécessaire pour les hooks) */
+function TxDetailList({ tSel, catDefs }) {
+  const [allTxs] = useTransactions();
+  const groups = getWeekGroups(allTxs.slice(0, 20)).slice(0, 2);
+  return (
+    <main className="tx-main with-panel">
+      <TxHeader />
+      <TxFilterBar />
+      <TxSummary />
+      <div className="tx-table">
+        <TxTableHead />
+        <div className="tx-tbody">
+          {groups.map((g, gi) => {
+            const groupSum = g.txs.reduce((s, t) => s + t.amt, 0);
+            return (
+              <div key={g.key}>
+                <div className="tx-group-h">
+                  <span>{g.label}</span>
+                  <span className="sum">{groupSum > 0 ? "+" : ""}{fmtEUR(groupSum, 2)}</span>
+                </div>
+                {g.txs.slice(0, gi === 0 ? 5 : 6).map((t, i) => (
+                  <TxRow key={gi + "-" + i} t={t} catDefs={catDefs}
+                         selected={tSel === t} dense={gi > 0}/>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </main>
+  );
+}
+
 /* ─────────────────────────────────────────────────────────────────
    Vue 2 — Liste + panneau de détail
    ───────────────────────────────────────────────────────────────── */
 function TxDetail({ t: tSel, onClose }) {
+  const [catDefs] = useCategories();
+  const [, setAllTxs] = useTransactions();
   const [catId, setCatId]             = useState(tSel.cat);
   const [catPickerOpen, setCatPickerOpen] = useState(false);
   const [deleteState, setDeleteState] = useState(false);
-  const catSel = txCatStyle(catId);
+  const catSel = txCatStyle(catId, catDefs);
 
-  const allCats = [
-    { id: "alim", label: "Alimentation", color: "#b8693d" },
-    { id: "loy",  label: "Logement",     color: "#3d2817" },
-    { id: "tra",  label: "Transports",   color: "#6b7a4f" },
-    { id: "loi",  label: "Loisirs",      color: "#a85a48" },
-    { id: "san",  label: "Santé",        color: "#9d8b73" },
-    { id: "abo",  label: "Abonnements",  color: "#cd8459" },
-    { id: "inc",  label: "Revenus",      color: "#6b7a4f" },
-    { id: "epa",  label: "Épargne",      color: "#9d8b73" },
-  ];
+  const allCats = catDefs;
 
   return (
     <div style={{
@@ -479,29 +522,7 @@ function TxDetail({ t: tSel, onClose }) {
       height: "100%",
       background: "var(--page-bg)",
     }}>
-      <main className="tx-main with-panel">
-        <TxHeader />
-        <TxFilterBar />
-        <TxSummary />
-
-        <div className="tx-table">
-          <TxTableHead />
-          <div className="tx-tbody">
-            <div className="tx-group-h">
-              <span>Cette semaine · 12 – 14 mai</span>
-              <span className="sum">−1 043,93 €</span>
-            </div>
-            {TX_LIST.slice(0, 5).map((t, i) => (
-              <TxRow key={i} t={t} selected={i === 0}/>
-            ))}
-            <div className="tx-group-h">
-              <span>Semaine du 5 mai · 5 – 11 mai</span>
-              <span className="sum">−253,34 €</span>
-            </div>
-            {TX_LIST.slice(5, 11).map((t, i) => <TxRow key={"w2-" + i} t={t} dense/>)}
-          </div>
-        </div>
-      </main>
+      <TxDetailList tSel={tSel} catDefs={catDefs}/>
 
       <aside className="tx-detail">
         <button className="tx-detail-close" onClick={onClose}>
@@ -536,7 +557,11 @@ function TxDetail({ t: tSel, onClose }) {
                           background: "var(--cream-50)", border: "1px solid var(--amber-500)",
                           borderRadius: 10, padding: 6, boxShadow: "0 4px 14px var(--shadow-soft)" }}>
               {allCats.map(c => (
-                <div key={c.id} onClick={() => { setCatId(c.id); setCatPickerOpen(false); }}
+                <div key={c.id} onClick={() => {
+                  setCatId(c.id);
+                  setAllTxs(prev => prev.map(t => String(t.id) === String(tSel.id) ? { ...t, cat: c.id } : t));
+                  setCatPickerOpen(false);
+                }}
                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px",
                               borderRadius: 7, cursor: "pointer", fontSize: 12,
                               background: c.id === catId ? "var(--amber-100)" : "transparent",
@@ -708,20 +733,22 @@ function TxEmpty() {
    Vue 4 — Sélection multiple (bulk actions)
    ───────────────────────────────────────────────────────────────── */
 function TxBulk({ onClose, startIdx }) {
+  const [allTxs]  = useTransactions();
+  const [catDefs] = useCategories();
   const [selected, setSelected] = useState(() => startIdx != null ? [startIdx] : []);
 
   const toggle     = idx => setSelected(prev =>
     prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
   );
-  const selectAll   = () => setSelected(TX_LIST.map((_, i) => i));
+  const selectAll   = () => setSelected(allTxs.map((_, i) => i));
   const deselectAll = () => setSelected([]);
 
   const selCount = selected.length;
-  const selTotal = selected.reduce((s, i) => s + Math.abs(TX_LIST[i]?.amt || 0), 0);
+  const selTotal = selected.reduce((s, i) => s + Math.abs(allTxs[i]?.amt || 0), 0);
 
   return (
     <main className="tx-main">
-      <TxHeader onExport={() => exportTxCSV(selected.map(i => TX_LIST[i]), "selection.csv")} />
+      <TxHeader onExport={() => exportTxCSV(selected.map(i => allTxs[i]).filter(Boolean), "selection.csv")} />
 
       {/* Bulk action bar (remplace la toolbar) */}
       <div className="tx-bulk-bar">
@@ -737,7 +764,7 @@ function TxBulk({ onClose, startIdx }) {
           </span>
         </span>
         <span style={{ fontSize: 11, color: "var(--cream-300)", cursor: "pointer" }}>
-          <span onClick={selectAll}>Tout sélectionner ({TX_LIST.length})</span>
+          <span onClick={selectAll}>Tout sélectionner ({allTxs.length})</span>
           {" · "}
           <span onClick={deselectAll}>Désélectionner</span>
         </span>
@@ -759,7 +786,7 @@ function TxBulk({ onClose, startIdx }) {
           Créer une règle
         </button>
         <button className="tx-bulk-action"
-                onClick={() => exportTxCSV(selected.map(i => TX_LIST[i]), "selection.csv")}>
+                onClick={() => exportTxCSV(selected.map(i => allTxs[i]).filter(Boolean), "selection.csv")}>
           Exporter…
         </button>
         <button className="tx-bulk-action danger">
@@ -778,31 +805,31 @@ function TxBulk({ onClose, startIdx }) {
         </button>
       </div>
 
-      <TxSummary />
+      <TxSummaryReal txs={selected.map(i => allTxs[i]).filter(Boolean)} allCount={allTxs.length}/>
 
       <div className="tx-table">
         <TxTableHead />
         <div className="tx-tbody">
-          <div className="tx-group-h">
-            <span>Cette semaine · 12 – 14 mai</span>
-            <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--amber-500)",
-                          fontFamily: "var(--font-mono)" }}>
-              {selected.filter(i => i >= 0 && i <= 4).length} sélectionnées
-            </span>
-          </div>
-          {TX_LIST.slice(0, 5).map((t, i) => (
-            <TxRow key={"a-" + i} t={t} bulk={selected.includes(i)} onClick={() => toggle(i)}/>
-          ))}
-          <div className="tx-group-h">
-            <span>Semaine du 5 mai · 5 – 11 mai</span>
-            <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--amber-500)",
-                          fontFamily: "var(--font-mono)" }}>
-              {selected.filter(i => i >= 5 && i <= 10).length} sélectionnées
-            </span>
-          </div>
-          {TX_LIST.slice(5, 11).map((t, i) => (
-            <TxRow key={"b-" + i} t={t} bulk={selected.includes(i + 5)} onClick={() => toggle(i + 5)}/>
-          ))}
+          {getWeekGroups(allTxs).map((g, gi) => {
+            // Find global indices for this group's transactions
+            const groupWithIdx = g.txs.map(t => ({ t, idx: allTxs.indexOf(t) }));
+            const selInGroup = groupWithIdx.filter(({ idx }) => selected.includes(idx)).length;
+            return (
+              <div key={g.key}>
+                <div className="tx-group-h">
+                  <span>{g.label}</span>
+                  <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--amber-500)",
+                                fontFamily: "var(--font-mono)" }}>
+                    {selInGroup > 0 ? `${selInGroup} sélectionnée${selInGroup > 1 ? "s" : ""}` : ""}
+                  </span>
+                </div>
+                {groupWithIdx.map(({ t, idx }, i) => (
+                  <TxRow key={gi + "-" + i} t={t} catDefs={catDefs}
+                         bulk={selected.includes(idx)} onClick={() => toggle(idx)}/>
+                ))}
+              </div>
+            );
+          })}
         </div>
       </div>
     </main>

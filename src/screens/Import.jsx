@@ -6,7 +6,7 @@
 
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { CATEGORIES } from "../data/mockData";
+import { useTransactions, useImportHistory, normalizeTransaction } from "../lib/store";
 import { fmtEUR } from "../lib/chartPrimitives";
 import {
   IcCalendar, IcSearch, IcUpload, IcLock, IcArrowR, IcChevDn,
@@ -32,9 +32,11 @@ function parseCsvRow(row, sep) {
 
 function normalizeDate(raw) {
   let d = raw.replace(/-/g, "/").trim();
-  if (/^\d{4}\/\d{2}\/\d{2}$/.test(d)) d = d.slice(8) + "/" + d.slice(5, 7);
-  else if (/^\d{2}\/\d{2}\/\d{4}$/.test(d)) d = d.slice(0, 5);
-  else if (/^\d{2}\/\d{2}\/\d{2}$/.test(d)) d = d.slice(0, 5);
+  const curYear = new Date().getFullYear();
+  if (/^\d{4}\/\d{2}\/\d{2}$/.test(d)) return d.slice(8) + "/" + d.slice(5, 7) + "/" + d.slice(0, 4);
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(d)) return d;
+  if (/^\d{2}\/\d{2}\/\d{2}$/.test(d)) return d.slice(0, 6) + "20" + d.slice(6);
+  if (/^\d{2}\/\d{2}$/.test(d))        return d + "/" + curYear;
   return d;
 }
 
@@ -96,10 +98,13 @@ function fmtSize(bytes) {
    Composant principal
    ───────────────────────────────────────────────────────────────── */
 export default function Import() {
-  const [state, setState]       = useState("empty");
-  const [parsedTxs, setParsedTxs] = useState(null);
-  const [fileName, setFileName] = useState("");
-  const [fileSize, setFileSize] = useState(0);
+  const navigate = useNavigate();
+  const [transactions, setTransactions] = useTransactions();
+  const [importHistory, setImportHistory] = useImportHistory();
+  const [state, setState]           = useState("empty");
+  const [parsedTxs, setParsedTxs]   = useState(null);
+  const [fileName, setFileName]     = useState("");
+  const [fileSize, setFileSize]     = useState(0);
   const [parseError, setParseError] = useState("");
 
   const handleFile = file => {
@@ -134,16 +139,31 @@ export default function Import() {
     }
   };
 
+  function handleConfirm() {
+    if (!parsedTxs) return;
+    const normalized = parsedTxs.map(t => normalizeTransaction(t));
+    setTransactions(prev => {
+      const ids = new Set(prev.map(t => String(t.id)));
+      return [...prev, ...normalized.filter(t => !ids.has(String(t.id)))];
+    });
+    setImportHistory(prev => [{
+      file: fileName,
+      date: new Date().toLocaleDateString("fr-FR"),
+      tx:   parsedTxs.length,
+      size: fmtSize(fileSize),
+      period: "—",
+      fmt:  "csv",
+    }, ...prev.slice(0, 9)]);
+    setState("success");
+  }
+
   return (
     <>
-      {state === "empty"   && <ImportEmpty   onFile={handleFile} />}
+      {state === "empty"   && <ImportEmpty   onFile={handleFile} importHistory={importHistory}/>}
       {state === "preview" && <ImportPreview txs={parsedTxs} fileName={fileName} fileSize={fileSize}
-                                              onConfirm={() => setState("success")}
-                                              onCancel={() => setState("empty")} />}
-      {state === "success" && <ImportSuccess  txs={parsedTxs} fileName={fileName}
-                                              onAgain={() => setState("empty")} />}
-      {state === "error"   && <ImportError    onRetry={() => setState("empty")}
-                                              errorMsg={parseError} fileName={fileName} />}
+                                              onConfirm={handleConfirm} onCancel={() => setState("empty")}/>}
+      {state === "success" && <ImportSuccess txs={parsedTxs} fileName={fileName} onAgain={() => setState("empty")}/>}
+      {state === "error"   && <ImportError   onRetry={() => setState("empty")} errorMsg={parseError} fileName={fileName}/>}
     </>
   );
 }
@@ -151,7 +171,7 @@ export default function Import() {
 /* ─────────────────────────────────────────────────────────────────
    1. État vide — drop zone + historique + sources reconnues
    ───────────────────────────────────────────────────────────────── */
-function ImportEmpty({ onFile }) {
+function ImportEmpty({ onFile, importHistory = [] }) {
   const fileRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
@@ -162,13 +182,6 @@ function ImportEmpty({ onFile }) {
   const [newSourceName, setNewSourceName] = useState("");
   const [newSourceFmt, setNewSourceFmt] = useState("CSV");
   const [userSources, setUserSources] = useState([]);
-  const HIST = [
-    { id: 1, file: "releve_bnp_mai_2026.csv",  date: "14/05/2026", bank: "BNP Paribas",  n: 18, size: "42 Ko" },
-    { id: 2, file: "releve_bnp_avril_2026.csv", date: "01/05/2026", bank: "BNP Paribas",  n: 22, size: "51 Ko" },
-    { id: 3, file: "releve_bnp_mars_2026.csv",  date: "02/04/2026", bank: "BNP Paribas",  n: 19, size: "46 Ko" },
-    { id: 4, file: "releve_lbp_mars_2026.csv",  date: "28/03/2026", bank: "La Banque Postale", n: 5, size: "12 Ko" },
-    { id: 5, file: "releve_bnp_fev_2026.csv",   date: "03/03/2026", bank: "BNP Paribas",  n: 21, size: "49 Ko" },
-  ];
 
   const sources = [
     { name: "BNP Paribas",            fmt: "PDF, CSV", last: "Avril 2026", status: "ok" },
@@ -179,18 +192,11 @@ function ImportEmpty({ onFile }) {
     { name: "Autre — CSV générique",  fmt: "CSV",      last: null,         status: "generic" },
   ];
 
-  const history = [
-    { file: "releve-bnp-avril-2026.pdf", date: "12 mai · 10h32",  tx: 47, period: "01 – 30 avril",   size: "318 ko" },
-    { file: "lbp-mars-2026.csv",         date: "08 avril · 19h12", tx: 42, period: "01 – 31 mars",    size: "12 ko"  },
-    { file: "releve-bnp-mars-2026.pdf",  date: "06 avril · 22h04", tx: 39, period: "01 – 31 mars",    size: "291 ko" },
-    { file: "lbp-fevrier-2026.csv",      date: "08 mars · 18h44",  tx: 36, period: "01 – 28 février", size: "11 ko"  },
-  ];
-
   const allSources = [...sources, ...userSources].filter(s =>
     !searchQ || s.name.toLowerCase().includes(searchQ.toLowerCase())
   );
 
-  const filteredHistory = history.filter(h => {
+  const filteredHistory = importHistory.filter(h => {
     if (histFilter === "all") return true;
     return h.file.toLowerCase().endsWith("." + histFilter);
   });
@@ -401,7 +407,11 @@ function ImportEmpty({ onFile }) {
           <div className="ie-card-h">
             <div>
               <div className="ie-card-t">Imports récents</div>
-              <div className="ie-card-s">4 fichiers · 164 transactions importées</div>
+              <div className="ie-card-s">
+                {importHistory.length > 0
+                  ? `${importHistory.length} fichier${importHistory.length > 1 ? "s" : ""} · ${importHistory.reduce((s, h) => s + (h.tx || 0), 0)} transactions importées`
+                  : "Aucun import pour l'instant"}
+              </div>
             </div>
             <div style={{ display: "flex", gap: 4 }}>
               {[["all","Tous"],["pdf","PDF"],["csv","CSV"]].map(([k,label]) => (
@@ -412,8 +422,12 @@ function ImportEmpty({ onFile }) {
             </div>
           </div>
           <div style={{ overflow: "hidden" }}>
-            {filteredHistory.map(h => (
-              <div key={h.file} className="ie-hist-row">
+            {filteredHistory.length === 0 ? (
+              <div style={{ padding: "24px 20px", textAlign: "center", color: "var(--ink-500)", fontSize: 12 }}>
+                Aucun import enregistré.
+              </div>
+            ) : filteredHistory.map((h, idx) => (
+              <div key={idx} className="ie-hist-row">
                 <div className="ie-hist-ico">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -427,11 +441,6 @@ function ImportEmpty({ onFile }) {
                 <span className="ie-hist-tx">{h.tx} tx</span>
                 <div className="ie-hist-act">
                   <button className="ie-btn" title="Revoir"><IcSearch size={12}/></button>
-                  <button className="ie-btn" title="Supprimer">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>
-                    </svg>
-                  </button>
                 </div>
               </div>
             ))}
@@ -515,7 +524,7 @@ function ImportEmpty({ onFile }) {
                   Historique des imports
                 </div>
                 <div style={{ fontSize: 12, color: "var(--ink-500)", marginTop: 3 }}>
-                  {HIST.length} fichiers importés
+                  {importHistory.length} fichier{importHistory.length > 1 ? "s" : ""} importé{importHistory.length > 1 ? "s" : ""}
                 </div>
               </div>
               <button onClick={() => setHistOpen(false)} style={{
@@ -525,8 +534,12 @@ function ImportEmpty({ onFile }) {
               }}>×</button>
             </div>
             <div style={{ borderTop: "1px solid var(--line)" }}>
-              {HIST.map(h => (
-                <div key={h.id} style={{
+              {importHistory.length === 0 ? (
+                <div style={{ padding: "24px 0", textAlign: "center", color: "var(--ink-500)", fontSize: 12 }}>
+                  Aucun import enregistré.
+                </div>
+              ) : importHistory.map((h, idx) => (
+                <div key={idx} style={{
                   display: "grid", gridTemplateColumns: "1fr auto",
                   alignItems: "center", gap: 12,
                   padding: "12px 0", borderBottom: "1px dashed var(--line)",
@@ -534,13 +547,9 @@ function ImportEmpty({ onFile }) {
                   <div>
                     <div style={{ fontSize: 13, color: "var(--ink-800)", fontWeight: 500 }}>{h.file}</div>
                     <div style={{ fontSize: 11, color: "var(--ink-500)", marginTop: 2, fontFamily: "var(--font-mono)" }}>
-                      {h.bank} · {h.date} · {h.n} transactions · {h.size}
+                      {h.date} · {h.tx} transactions · {h.size}
                     </div>
                   </div>
-                  <button style={{
-                    padding: "4px 12px", fontSize: 11, border: "1px solid var(--line)",
-                    borderRadius: 6, background: "var(--cream-100)", cursor: "pointer", color: "var(--ink-700)",
-                  }}>Voir</button>
                 </div>
               ))}
             </div>

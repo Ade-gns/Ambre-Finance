@@ -5,7 +5,11 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocalStorage } from "../lib/storage";
 import { useNavigate } from "react-router-dom";
-import { CATEGORIES, MONTHLY, TRANSACTIONS } from "../data/mockData";
+import {
+  useTransactions, useCategories,
+  computeMonthly, computeCatTotals,
+  txMonthKey, monthKeyLabel, parseTxDate
+} from "../lib/store";
 import {
   Sparkline, RingGauge, fmtEUR, pathSmooth
 } from "../lib/chartPrimitives";
@@ -13,24 +17,10 @@ import {
   IcCalendar, IcSearch, IcUpload, IcChevDn, IcArrowUp, IcArrowDn, IcDot
 } from "../lib/icons";
 
-const MONTH_INFO = [
-  { label: "Juin",    year: 2025, full: "Juin 2025"      },
-  { label: "Juil.",   year: 2025, full: "Juillet 2025"   },
-  { label: "Août",    year: 2025, full: "Août 2025"       },
-  { label: "Sept.",   year: 2025, full: "Septembre 2025" },
-  { label: "Oct.",    year: 2025, full: "Octobre 2025"   },
-  { label: "Nov.",    year: 2025, full: "Novembre 2025"  },
-  { label: "Déc.",    year: 2025, full: "Décembre 2025"  },
-  { label: "Janv.",   year: 2026, full: "Janvier 2026"   },
-  { label: "Févr.",   year: 2026, full: "Février 2026"   },
-  { label: "Mars",    year: 2026, full: "Mars 2026"       },
-  { label: "Avril",   year: 2026, full: "Avril 2026"     },
-  { label: "Mai",     year: 2026, full: "Mai 2026"        },
-];
-
 export default function Dashboard() {
   const navigate    = useNavigate();
-  const [monthIdx, setMonthIdx]       = useLocalStorage("dash.monthIdx", MONTHLY.length - 1);
+  const [transactions] = useTransactions();
+  const [categories]   = useCategories();
   const [pickerOpen, setPickerOpen]   = useState(false);
   const [chartPeriod, setChartPeriod] = useLocalStorage("dash.chartPeriod", "12 m");
   const pickerRef = useRef(null);
@@ -42,29 +32,69 @@ export default function Dashboard() {
     return () => document.removeEventListener("mousedown", onDown);
   }, [pickerOpen]);
 
-  const info     = MONTH_INFO[monthIdx];
-  const current  = MONTHLY[monthIdx];
-  const prev     = monthIdx > 0 ? MONTHLY[monthIdx - 1] : null;
-  const isLast   = monthIdx === MONTHLY.length - 1;
+  // Derive monthly data
+  const monthly = computeMonthly(transactions);       // [{key, m, exp, inc}, ...] oldest→newest
+  const monthKeys = monthly.map(m => m.key);           // ["01/2026", "05/2026", ...]
+  const [selectedMonthKey, setSelectedMonthKey] = useState(null);
+
+  // Auto-select the latest month when data loads
+  const latestKey = monthly.length > 0 ? monthly[monthly.length - 1].key : null;
+  const activeKey = selectedMonthKey && monthKeys.includes(selectedMonthKey) ? selectedMonthKey : latestKey;
+
+  const current = monthly.find(m => m.key === activeKey) || { exp: 0, inc: 0 };
+  const prevIdx = monthly.findIndex(m => m.key === activeKey) - 1;
+  const prev    = prevIdx >= 0 ? monthly[prevIdx] : null;
 
   const totalExp = current.exp;
   const totalInc = current.inc;
   const net      = totalInc - totalExp;
-  const budget   = 2000;
-  const pct      = totalExp / budget;
-  const expDelta = prev ? (totalExp - prev.exp) / prev.exp : 0;
 
-  const daysInMonth = 31;
-  const today = isLast ? 14 : daysInMonth;
+  // Budget = sum of category budgets (excluding inc)
+  const budget = categories.filter(c => c.id !== "inc").reduce((s, c) => s + (c.budget || 0), 0) || 2000;
+  const pct    = budget > 0 ? totalExp / budget : 0;
+  const expDelta = prev ? (totalExp - prev.exp) / (prev.exp || 1) : 0;
+
+  // Monthly transactions for selected period
+  const monthTxs = transactions.filter(t => txMonthKey(t.d) === activeKey);
+
+  // Daily expense array for heatmap
+  const [monthNum, yearNum] = activeKey ? activeKey.split("/").map(Number) : [new Date().getMonth() + 1, new Date().getFullYear()];
+  const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
+  const today = new Date();
+  const isCurrentMonth = today.getMonth() + 1 === monthNum && today.getFullYear() === yearNum;
+  const todayDay = isCurrentMonth ? today.getDate() : daysInMonth;
+
   const dailyExp = Array.from({ length: daysInMonth }, (_, i) => {
-    if (i >= today) return null;
-    const base = 20 + (Math.sin(i * 0.7) + 1) * 30;
-    const noise = ((i * 31 + 7) % 11) * 4;
-    if (i === 1) return 65;
-    if (i === 4) return 95;
-    if (i === 8) return 12;
-    return base + noise;
+    const day = i + 1;
+    if (day > todayDay) return null;
+    const total = monthTxs
+      .filter(t => { const p = t.d.split("/"); return parseInt(p[0], 10) === day; })
+      .filter(t => t.amt < 0)
+      .reduce((s, t) => s + Math.abs(t.amt), 0);
+    return total;
   });
+
+  // Category totals for selected month
+  const catTotals = computeCatTotals(transactions, categories, activeKey);
+
+  // Recent transactions (last 10 of selected month, sorted newest first)
+  const recentTxs = [...monthTxs]
+    .sort((a, b) => {
+      const da = parseTxDate(a.d), db = parseTxDate(b.d);
+      return (db?.getTime() || 0) - (da?.getTime() || 0);
+    })
+    .slice(0, 10);
+
+  // Group recentTxs by date for display
+  const recentGrouped = {};
+  recentTxs.forEach(t => {
+    const key = t.d;
+    if (!recentGrouped[key]) recentGrouped[key] = [];
+    recentGrouped[key].push(t);
+  });
+
+  const activeLabel = monthKeyLabel(activeKey);
+  const prevLabel = prev ? monthKeyLabel(prev.key) : null;
 
   return (
     <main className="atc-main">
@@ -233,7 +263,7 @@ export default function Dashboard() {
         .atc-tl-amt.pos { color: var(--sage-500); }
 
         /* Month picker */
-        .atc-month-picker {
+        .atc-pick-drop {
           position: absolute; top: calc(100% + 6px); right: 0; z-index: 100;
           background: var(--cream-50); border: 1px solid var(--line);
           border-radius: 12px; padding: 6px;
@@ -241,50 +271,44 @@ export default function Dashboard() {
           min-width: 200px;
           max-height: 320px; overflow-y: auto;
         }
-        .atc-month-opt {
+        .atc-pick-btn {
           display: flex; justify-content: space-between; align-items: center;
           padding: 8px 12px; border-radius: 8px; cursor: pointer;
-          font-size: 13px; color: var(--ink-700);
+          font-size: 13px; color: var(--ink-700); width: 100%;
+          background: transparent; border: none;
         }
-        .atc-month-opt:hover { background: var(--cream-100); }
-        .atc-month-opt.active {
+        .atc-pick-btn:hover { background: var(--cream-100); }
+        .atc-pick-btn.active {
           background: var(--amber-100); color: var(--amber-500); font-weight: 500;
         }
-        .atc-month-exp {
-          font-family: var(--font-mono); font-size: 11px; color: var(--ink-500);
-        }
-        .atc-month-opt.active .atc-month-exp { color: var(--amber-400); }
       `}</style>
 
       <div className="atc-top">
         <div>
-          <div className="atc-bread">Ambre · <strong>Tableau de bord</strong> · {info.full}</div>
+          <div className="atc-bread">Ambre · <strong>Tableau de bord</strong> · {activeLabel}</div>
           <h1 style={{
             fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 400,
             margin: "4px 0 0", color: "var(--ink-900)", letterSpacing: "-0.01em"
           }}>
-            {isLast
-              ? <>14 jours dans le mois, <em style={{ color: "var(--amber-500)" }}>17 restants</em>.</>
+            {isCurrentMonth && activeKey === latestKey
+              ? <>{todayDay} jours dans le mois, <em style={{ color: "var(--amber-500)" }}>{daysInMonth - todayDay} restants</em>.</>
               : <>Mois terminé · <em style={{ color: "var(--amber-500)" }}>{fmtEUR(totalExp, 0)}</em> dépensés.</>
             }
           </h1>
         </div>
         <div className="atc-tool" style={{ position: "relative" }} ref={pickerRef}>
           <button className="atc-btn" onClick={() => setPickerOpen(v => !v)}>
-            <IcCalendar size={14}/>{info.full} <IcChevDn size={12}/>
+            <IcCalendar size={14}/>{activeLabel} <IcChevDn size={12}/>
           </button>
           {pickerOpen && (
-            <div className="atc-month-picker">
-              {[...MONTH_INFO].reverse().map((mi, ri) => {
-                const idx = MONTHLY.length - 1 - ri;
-                return (
-                  <div key={mi.full} className={"atc-month-opt" + (idx === monthIdx ? " active" : "")}
-                       onClick={() => { setMonthIdx(idx); setPickerOpen(false); }}>
-                    <span>{mi.full}</span>
-                    <span className="atc-month-exp">{fmtEUR(MONTHLY[idx].exp, 0)}</span>
-                  </div>
-                );
-              })}
+            <div className="atc-pick-drop">
+              {monthly.slice().reverse().map(m => (
+                <button key={m.key} className={"atc-pick-btn" + (m.key === activeKey ? " active" : "")}
+                  onClick={() => { setSelectedMonthKey(m.key); setPickerOpen(false); }}>
+                  <span>{monthKeyLabel(m.key)}</span>
+                  <span className="mono" style={{ fontSize:11, opacity:0.6 }}>{fmtEUR(m.exp, 0)}</span>
+                </button>
+              ))}
             </div>
           )}
           <button className="atc-btn" onClick={() => navigate("/transactions")}><IcSearch size={14}/></button>
@@ -298,7 +322,7 @@ export default function Dashboard() {
       <div className="atc-hero">
         <div className="atc-card atc-hero-big">
           <div>
-            <div className="atc-hero-l">Dépensé · {info.full}</div>
+            <div className="atc-hero-l">Dépensé · {activeLabel}</div>
             {(() => {
               const [intPart, decPart] = fmtEUR(totalExp, 2).replace(/\s?€/, "").split(",");
               return (
@@ -312,11 +336,11 @@ export default function Dashboard() {
             {prev && (
               <span className={"atc-pill " + (expDelta > 0 ? "warn" : "good")}>
                 {expDelta > 0 ? <IcArrowUp size={11}/> : <IcArrowDn size={11}/>}
-                {expDelta > 0 ? "+" : ""}{Math.round(expDelta * 100)} % vs {MONTH_INFO[monthIdx - 1].label}
+                {expDelta > 0 ? "+" : ""}{Math.round(expDelta * 100)} % vs {prevLabel}
               </span>
             )}
-            {isLast && (
-              <span className="atc-pill">Projection · {fmtEUR(totalExp + (totalExp / 14) * 17, 0)}</span>
+            {isCurrentMonth && activeKey === latestKey && todayDay > 0 && (
+              <span className="atc-pill">Projection · {fmtEUR(totalExp + (totalExp / todayDay) * (daysInMonth - todayDay), 0)}</span>
             )}
           </div>
         </div>
@@ -331,7 +355,7 @@ export default function Dashboard() {
                        color="var(--amber-500)" track="rgba(184,105,61,0.12)"/>
           </div>
           <div className="atc-mini-d atc-delta-down">
-            <IcDot size={10}/>{fmtEUR(budget - totalExp, 0)} restants · 17 j
+            <IcDot size={10}/>{fmtEUR(budget - totalExp, 0)} restants
           </div>
         </div>
 
@@ -340,19 +364,23 @@ export default function Dashboard() {
             <div className="atc-mini-l">Revenus</div>
             <div className="atc-mini-v">{fmtEUR(totalInc, 0)}</div>
             <div className="atc-mini-d" style={{ color: "var(--ink-500)" }}>
-              <IcDot size={10}/>stable depuis 3 mois
+              <IcDot size={10}/>{monthly.length > 1 ? `sur ${monthly.length} mois` : "ce mois"}
             </div>
           </div>
-          <Sparkline data={MONTHLY.map(m => m.inc)} color="#6b7a4f" width={220} height={44}/>
+          <Sparkline data={monthly.map(m => m.inc)} color="#6b7a4f" width={220} height={44}/>
         </div>
 
         <div className="atc-card" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
             <div className="atc-mini-l">Solde net</div>
-            <div className="atc-mini-v" style={{ color: "var(--sage-500)" }}>+{fmtEUR(net, 0)}</div>
-            <div className="atc-mini-d atc-delta-up"><IcArrowDn size={11}/>−110 € vs avril</div>
+            <div className="atc-mini-v" style={{ color: net >= 0 ? "var(--sage-500)" : "var(--rose-500)" }}>
+              {net >= 0 ? "+" : ""}{fmtEUR(net, 0)}
+            </div>
+            <div className={"atc-mini-d " + (net >= 0 ? "atc-delta-down" : "atc-delta-up")}>
+              {prev ? <><IcArrowDn size={11}/>{fmtEUR(Math.abs(net - (prev.inc - prev.exp)), 0)} € vs {prevLabel}</> : <IcDot size={10}/>}
+            </div>
           </div>
-          <Sparkline data={MONTHLY.map(m => m.inc - m.exp)} color="#b8693d" width={220} height={44}/>
+          <Sparkline data={monthly.map(m => m.inc - m.exp)} color="#b8693d" width={220} height={44}/>
         </div>
       </div>
 
@@ -363,7 +391,7 @@ export default function Dashboard() {
             <div className="atc-card-h">
               <div>
                 <div className="atc-card-t">Calendrier des dépenses</div>
-                <div className="atc-card-s">intensité par jour · {info.full.toLowerCase()}</div>
+                <div className="atc-card-s">intensité par jour · {activeLabel.toLowerCase()}</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: "var(--ink-500)" }}>
                 <span>−</span>
@@ -382,21 +410,25 @@ export default function Dashboard() {
             </div>
             <div className="atc-heat">
               {(() => {
-                const offset = 4;
+                // Calculate the weekday offset for day 1 (0=Mon..6=Sun)
+                const firstDayDate = new Date(yearNum, monthNum - 1, 1);
+                const rawDow = firstDayDate.getDay(); // 0=Sun,1=Mon,...6=Sat
+                const offset = rawDow === 0 ? 6 : rawDow - 1; // convert to Mon-based
                 const cells = [];
                 for (let i = 0; i < offset; i++) {
                   cells.push(<div key={"e"+i} className="atc-heat-cell" style={{ visibility: "hidden" }}/>);
                 }
-                const max = Math.max(...dailyExp.filter(v => v != null));
+                const validExp = dailyExp.filter(v => v != null && v > 0);
+                const max = validExp.length > 0 ? Math.max(...validExp) : 1;
                 dailyExp.forEach((v, i) => {
                   const day = i + 1;
                   if (v == null) {
                     cells.push(<div key={day} className="atc-heat-cell future">{day}</div>);
                   } else {
-                    const o = 0.15 + (v / max) * 0.75;
+                    const o = v > 0 ? 0.15 + (v / max) * 0.75 : 0.05;
                     cells.push(
                       <div key={day}
-                           className={"atc-heat-cell" + (day === today ? " today" : "")}
+                           className={"atc-heat-cell" + (isCurrentMonth && day === todayDay ? " today" : "")}
                            style={{ background: `rgba(184,105,61,${o})` }}>
                         {day}
                       </div>
@@ -411,9 +443,19 @@ export default function Dashboard() {
               color: "var(--ink-500)", borderTop: "1px solid var(--line)",
               paddingTop: 10, marginTop: 4
             }}>
-              <span>Pire jour · <strong className="mono" style={{ color: "var(--rose-500)" }}>13 mai (loyer)</strong></span>
-              <span>Calme · <strong className="mono" style={{ color: "var(--sage-500)" }}>9 mai</strong></span>
-              <span>Moyenne · <strong className="mono" style={{ color: "var(--ink-800)" }}>124 €</strong></span>
+              {(() => {
+                const validDays = dailyExp.map((v, i) => ({ day: i + 1, v })).filter(x => x.v != null && x.v > 0);
+                const worst = validDays.length > 0 ? validDays.reduce((a, b) => b.v > a.v ? b : a) : null;
+                const best  = validDays.length > 0 ? validDays.reduce((a, b) => b.v < a.v ? b : a) : null;
+                const avg   = validDays.length > 0 ? validDays.reduce((s, x) => s + x.v, 0) / validDays.length : 0;
+                return (
+                  <>
+                    <span>Pire jour · <strong className="mono" style={{ color: "var(--rose-500)" }}>{worst ? worst.day + " " + monthKeyLabel(activeKey).split(" ")[0].toLowerCase() : "—"}</strong></span>
+                    <span>Calme · <strong className="mono" style={{ color: "var(--sage-500)" }}>{best ? best.day + " " + monthKeyLabel(activeKey).split(" ")[0].toLowerCase() : "—"}</strong></span>
+                    <span>Moyenne · <strong className="mono" style={{ color: "var(--ink-800)" }}>{fmtEUR(avg, 0)}</strong></span>
+                  </>
+                );
+              })()}
             </div>
           </div>
 
@@ -424,7 +466,7 @@ export default function Dashboard() {
                 <div className="atc-card-s">
                   {chartPeriod === "12 m" ? "12 derniers mois"
                   : chartPeriod === "6 m"  ? "6 derniers mois"
-                  : "2026 · janvier → mai"}
+                  : "depuis le début"}
                 </div>
               </div>
               <div style={{ display: "flex", gap: 4 }}>
@@ -439,7 +481,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div style={{ flex: 1 }}>
-              <AreaChartLight period={chartPeriod}/>
+              <AreaChartLight monthly={monthly} period={chartPeriod}/>
             </div>
           </div>
         </div>
@@ -448,37 +490,31 @@ export default function Dashboard() {
           <div className="atc-card">
             <div className="atc-card-h">
               <div>
-                <div className="atc-card-t">Catégories — mai 2026</div>
+                <div className="atc-card-t">Catégories — {activeLabel}</div>
                 <div className="atc-card-s">cliquer pour le détail</div>
               </div>
             </div>
-            <div className="atc-cats">
-              {CATEGORIES.slice(0, 6).map(c => (
-                <div key={c.id} className="atc-cat-card" onClick={() => navigate("/categories")}
-                     style={{ cursor: "pointer" }}>
-                  <div className="atc-cat-h">
-                    <span className="amb-dot" style={{ background: c.color }}/>
-                    {c.label}
+            {catTotals.length === 0 ? (
+              <div style={{ padding: "20px 0", textAlign: "center", color: "var(--ink-500)", fontSize: 12 }}>
+                Aucune dépense ce mois.
+              </div>
+            ) : (
+              <div className="atc-cats">
+                {catTotals.slice(0, 6).map(c => (
+                  <div key={c.id} className="atc-cat-card" onClick={() => navigate("/categories")}
+                       style={{ cursor: "pointer" }}>
+                    <div className="atc-cat-h">
+                      <span className="amb-dot" style={{ background: c.color }}/>
+                      {c.label}
+                    </div>
+                    <div className="atc-cat-v">{fmtEUR(c.amount, 0)}</div>
+                    <div className="atc-cat-foot">
+                      <span>{Math.round(c.share * 100)}% du mois</span>
+                    </div>
                   </div>
-                  <div className="atc-cat-v">{fmtEUR(c.amount, 0)}</div>
-                  <Sparkline
-                    data={Array.from({ length: 8 }, (_, i) =>
-                      c.amount * (0.6 + Math.abs(Math.sin(i * 0.9 + c.id.charCodeAt(0))) * 0.7)
-                    )}
-                    color={c.color} width={180} height={26}/>
-                  <div className="atc-cat-foot">
-                    <span>{Math.round(c.share * 100)}% du mois</span>
-                    <span style={{
-                      color: c.trend > 0 ? "var(--rose-500)"
-                           : c.trend < 0 ? "var(--sage-500)"
-                                          : "var(--ink-500)"
-                    }}>
-                      {c.trend > 0 ? "+" : ""}{(c.trend * 100).toFixed(0)} %
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="atc-card" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -491,26 +527,32 @@ export default function Dashboard() {
                       onClick={() => navigate("/transactions")}>Tout voir →</button>
             </div>
             <div className="atc-tl">
-              {(() => {
+              {recentTxs.length === 0 ? (
+                <div style={{ padding: "20px 0", textAlign: "center", color: "var(--ink-500)", fontSize: 12 }}>
+                  Aucune transaction ce mois.
+                </div>
+              ) : (() => {
                 const grouped = {};
-                TRANSACTIONS.forEach(t => { (grouped[t.d] = grouped[t.d] || []).push(t); });
+                recentTxs.forEach(t => { (grouped[t.d] = grouped[t.d] || []).push(t); });
                 return Object.entries(grouped).slice(0, 4).map(([day, items]) => {
-                  const [num, mo] = day.split(" ");
+                  const parts = day.split("/");
+                  const num = parts[0];
+                  const monthShort = parts.length >= 2 ? ["","Janv","Févr","Mars","Avr","Mai","Juin","Juil","Août","Sept","Oct","Nov","Déc"][parseInt(parts[1], 10)] || "" : "";
                   return (
                     <div key={day} className="atc-tl-day">
                       <div className="atc-tl-date">
                         <span className="num">{num}</span>
-                        {mo}
+                        {monthShort}
                       </div>
                       <div className="atc-tl-items">
                         {items.map((t, i) => {
-                          const cat = CATEGORIES.find(c => c.id === t.cat);
+                          const cat = categories.find(c => c.id === t.cat);
                           return (
                             <div key={i} className="atc-tl-row">
-                              <span className="amb-dot" style={{ background: cat ? cat.color : "var(--sage-500)" }}/>
+                              <span className="amb-dot" style={{ background: cat ? cat.color : "#9d8b73" }}/>
                               <div>
-                                <div className="lbl">{t.label}</div>
-                                <div className="cat">{cat ? cat.label : "Revenus"} · {t.mode}</div>
+                                <div className="lbl">{t.lbl}</div>
+                                <div className="cat">{cat ? cat.label : "Autre"} · {t.mode}</div>
                               </div>
                               <span className={"atc-tl-amt" + (t.amt > 0 ? " pos" : "")}>
                                 {t.amt > 0 ? "+" : ""}{fmtEUR(t.amt, 2)}
@@ -532,10 +574,23 @@ export default function Dashboard() {
 }
 
 /* Aire d'évolution mensuelle utilisée dans le Dashboard */
-function AreaChartLight({ period = "12 m" }) {
-  const slice = period === "6 m" ? MONTHLY.slice(-6)
-              : period === "YTD" ? MONTHLY.filter((_, i) => i >= 7)
-              : MONTHLY;
+function AreaChartLight({ monthly, period = "12 m" }) {
+  const slice = period === "6 m"  ? monthly.slice(-6)
+              : period === "YTD"  ? monthly.filter(m => {
+                  const year = m.key ? parseInt(m.key.split("/")[1], 10) : 0;
+                  return year === new Date().getFullYear();
+                })
+              : monthly.slice(-12);
+
+  if (slice.length < 2) {
+    return (
+      <div style={{ height: 180, display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 12, color: "var(--ink-500)" }}>
+        Pas assez de données pour tracer le graphique.
+      </div>
+    );
+  }
+
   const expVals = slice.map(m => m.exp);
   const min = Math.min(...expVals) * 0.85;
   const max = Math.max(...expVals) * 1.05;
@@ -544,7 +599,7 @@ function AreaChartLight({ period = "12 m" }) {
   const innerW = width - padX - padR;
   const innerH = height - padY - padB;
   const xs = slice.map((_, i) => padX + (i * innerW) / (slice.length - 1));
-  const yOf = v => padY + innerH - ((v - min) / (max - min)) * innerH;
+  const yOf = v => padY + innerH - ((v - min) / (max - min || 1)) * innerH;
   const pts = xs.map((x, i) => [x, yOf(expVals[i])]);
   const line = pathSmooth(pts);
   const area = `${line} L ${xs[xs.length-1]} ${padY + innerH} L ${xs[0]} ${padY + innerH} Z`;

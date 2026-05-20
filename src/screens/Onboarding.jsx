@@ -7,17 +7,128 @@
 
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTransactions } from "../lib/store";
 import { IcLock, IcTag, IcChart, IcUpload } from "../lib/icons";
+
+const SAMPLE_RAW = [
+  // Février
+  ["28/02/2026","Virement Dupont SAS","Salaire février","inc",2560,"Virement"],
+  // Mars
+  ["01/03/2026","Loyer résidence","Prélèvement mars","loy",-820,"Prélèvement"],
+  ["02/03/2026","Carrefour City","Courses","alim",-38.50,"CB"],
+  ["03/03/2026","Netflix","Abonnement mensuel","abo",-15.99,"Prélèvement"],
+  ["03/03/2026","Spotify","Premium","abo",-10.99,"Prélèvement"],
+  ["04/03/2026","RATP","Navigo mensuel","tra",-86.40,"CB"],
+  ["05/03/2026","Boulangerie du Marché","Pain & viennoiseries","alim",-12.30,"CB"],
+  ["06/03/2026","Pharmacie Centrale","Médicaments","san",-24.60,"CB"],
+  ["07/03/2026","Le Bistrot","Déjeuner","alim",-16.50,"CB"],
+  ["08/03/2026","Monoprix","Courses du week-end","alim",-72.40,"CB"],
+  ["10/03/2026","Amazon Prime","Abonnement","abo",-6.99,"Prélèvement"],
+  ["10/03/2026","Fnac.com","Livre","loi",-19.90,"CB"],
+  ["11/03/2026","Darty","Petits électroménagers","aut",-49.00,"CB"],
+  ["12/03/2026","Sushi Shop","Livraison","alim",-34.80,"CB"],
+  ["13/03/2026","Gym Direct","Abonnement","abo",-19.90,"Prélèvement"],
+  ["14/03/2026","EDF","Électricité","loy",-62.00,"Prélèvement"],
+  ["14/03/2026","Le Petit Café","Café","alim",-4.20,"CB"],
+  ["15/03/2026","Virement Dupont SAS","Salaire mars","inc",2560,"Virement"],
+  ["16/03/2026","Lidl","Courses","alim",-44.70,"CB"],
+  ["17/03/2026","SNCF","Paris-Lyon","tra",-43.00,"CB"],
+  ["18/03/2026","Uber Eats","Livraison","alim",-28.50,"CB"],
+  ["19/03/2026","Cinéma UGC","Séance","loi",-13.50,"CB"],
+  ["19/03/2026","Bar Le Central","Soirée","loi",-22.00,"CB"],
+  ["20/03/2026","Pharmacie Centrale","Ordo","san",-18.40,"CB"],
+  ["21/03/2026","Auchan Drive","Courses","alim",-89.30,"CB"],
+  ["22/03/2026","Free Mobile","Forfait","abo",-19.99,"Prélèvement"],
+  ["23/03/2026","BoulPaul","Sandwich","alim",-9.50,"CB"],
+  ["24/03/2026","Virement épargne","Livret A","epa",-300,"Virement"],
+  ["25/03/2026","Kiabi","Vêtements","aut",-56.90,"CB"],
+  ["26/03/2026","Carrefour Market","Courses","alim",-61.20,"CB"],
+  ["27/03/2026","La Bonne Table","Dîner","loi",-58.00,"CB"],
+  ["28/03/2026","TotalEnergies","Essence","tra",-65.00,"CB"],
+  ["29/03/2026","iTunes","App","abo",-1.99,"CB"],
+  ["30/03/2026","Monoprix","Courses","alim",-45.10,"CB"],
+  ["31/03/2026","Boulangerie","Viennoiseries","alim",-8.70,"CB"],
+  // Avril
+  ["01/04/2026","Loyer résidence","Prélèvement avril","loy",-820,"Prélèvement"],
+  ["01/04/2026","Netflix","Abonnement mensuel","abo",-15.99,"Prélèvement"],
+  ["01/04/2026","Spotify","Premium","abo",-10.99,"Prélèvement"],
+  ["02/04/2026","RATP","Navigo","tra",-86.40,"CB"],
+  ["03/04/2026","Lidl","Courses","alim",-52.30,"CB"],
+  ["04/04/2026","Le Bistrot","Déjeuner","alim",-14.80,"CB"],
+  ["05/04/2026","Amazon Prime","Abonnement","abo",-6.99,"Prélèvement"],
+  ["06/04/2026","Pharmacie","Médicaments","san",-32.50,"CB"],
+  ["07/04/2026","Carrefour","Courses","alim",-78.60,"CB"],
+  ["08/04/2026","EDF","Électricité","loy",-62.00,"Prélèvement"],
+  ["09/04/2026","Gym Direct","Abonnement","abo",-19.90,"Prélèvement"],
+  ["10/04/2026","Free Mobile","Forfait","abo",-19.99,"Prélèvement"],
+  ["11/04/2026","Sushi Shop","Livraison","alim",-38.90,"CB"],
+  ["12/04/2026","MK2 Cinéma","Film","loi",-11.00,"CB"],
+  ["13/04/2026","Bar Le Central","Soirée","loi",-18.00,"CB"],
+  ["14/04/2026","Boulangerie","Pain","alim",-7.40,"CB"],
+  ["15/04/2026","Virement Dupont SAS","Salaire avril","inc",2560,"Virement"],
+  ["16/04/2026","Auchan","Courses","alim",-94.20,"CB"],
+  ["17/04/2026","SNCF","Paris-Bordeaux","tra",-62.00,"CB"],
+  ["18/04/2026","Le Petit Café","Café","alim",-5.10,"CB"],
+  ["19/04/2026","Decathlon","Sport","loi",-89.00,"CB"],
+  ["20/04/2026","Carrefour Market","Courses","alim",-55.80,"CB"],
+  ["21/04/2026","Uber Eats","Livraison","alim",-32.40,"CB"],
+  ["22/04/2026","Virement épargne","Livret A","epa",-300,"Virement"],
+  ["23/04/2026","Monoprix","Courses","alim",-42.90,"CB"],
+  ["24/04/2026","iTunes","App","abo",-1.99,"CB"],
+  ["25/04/2026","Restaurant Chez Paul","Dîner","loi",-72.00,"CB"],
+  ["26/04/2026","TotalEnergies","Essence","tra",-58.00,"CB"],
+  ["27/04/2026","Auchan Drive","Courses","alim",-82.40,"CB"],
+  ["28/04/2026","Darty","Ampoules","aut",-22.00,"CB"],
+  ["29/04/2026","Boulangerie","Pâtisseries","alim",-11.20,"CB"],
+  ["30/04/2026","Pharmacie","Vitamines","san",-21.00,"CB"],
+  // Mai
+  ["01/05/2026","Loyer résidence","Prélèvement mai","loy",-820,"Prélèvement"],
+  ["01/05/2026","Netflix","Abonnement mensuel","abo",-15.99,"Prélèvement"],
+  ["01/05/2026","Spotify","Premium","abo",-10.99,"Prélèvement"],
+  ["02/05/2026","RATP","Navigo","tra",-86.40,"CB"],
+  ["03/05/2026","Carrefour City","Courses","alim",-36.80,"CB"],
+  ["04/05/2026","Amazon Prime","Abonnement","abo",-6.99,"Prélèvement"],
+  ["05/05/2026","Gym Direct","Abonnement","abo",-19.90,"Prélèvement"],
+  ["06/05/2026","Free Mobile","Forfait","abo",-19.99,"Prélèvement"],
+  ["06/05/2026","Auchan Drive","Courses","alim",-82.40,"CB"],
+  ["07/05/2026","Monoprix","Courses","alim",-39.85,"CB"],
+  ["07/05/2026","Le Bistrot","Déjeuner","alim",-13.70,"CB"],
+  ["08/05/2026","EDF","Électricité","loy",-62.00,"Prélèvement"],
+  ["09/05/2026","Fnac.com","Livre tech","loi",-34.90,"CB"],
+  ["09/05/2026","Pharmacie de l'Hôtel","Médicaments","san",-22.50,"CB"],
+  ["10/05/2026","MK2 Cinéma","Film","loi",-11.00,"CB"],
+  ["10/05/2026","Bar Le Central","Soirée","loi",-22.00,"CB"],
+  ["11/05/2026","Fnac.com","Casque Bluetooth","loi",-229.90,"CB"],
+  ["12/05/2026","Carrefour Market","Courses","alim",-52.34,"CB"],
+  ["13/05/2026","Virement Dupont SAS","Salaire mai","inc",2560,"Virement"],
+  ["14/05/2026","Le Petit Café","Café","alim",-14.20,"CB"],
+  ["15/05/2026","Lidl","Courses","alim",-47.60,"CB"],
+  ["16/05/2026","Virement épargne","Livret A","epa",-300,"Virement"],
+  ["17/05/2026","Uber Eats","Livraison","alim",-29.80,"CB"],
+  ["18/05/2026","Boulangerie","Pain","alim",-8.90,"CB"],
+  ["19/05/2026","TotalEnergies","Essence","tra",-61.00,"CB"],
+];
+const DAYS_SHORT = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
+const SAMPLE_TRANSACTIONS = SAMPLE_RAW.map(([d, lbl, sub, cat, amt, mode], i) => {
+  const [dd, mm, yyyy] = d.split("/").map(Number);
+  const dow = DAYS_SHORT[new Date(yyyy, mm - 1, dd).getDay()];
+  return { id: i + 1, d, lbl, sub, cat, amt, acc: "BNP Principal", mode, dow, conf: 100 };
+});
 
 export default function Onboarding() {
   const navigate = useNavigate();
+  const [, setTransactions] = useTransactions();
   const fileRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
 
   function handleFiles(files) {
     if (!files || files.length === 0) return;
-    // TODO: wire into import flow
     navigate("/import");
+  }
+
+  function loadSample() {
+    setTransactions(SAMPLE_TRANSACTIONS);
+    navigate("/");
   }
 
   return (
@@ -133,10 +244,10 @@ export default function Onboarding() {
           <div style={{ flex: 1 }}>
             <div className="ob-alt-t">Pas de relevé sous la main ?</div>
             <div className="ob-alt-s">
-              Démarrez avec un jeu de données d'exemple — 3 mois fictifs, 142 transactions.
+              Démarrez avec un jeu de données d'exemple — 3 mois fictifs, 95 transactions.
             </div>
           </div>
-          <span className="ob-alt-cta">Charger l'exemple →</span>
+          <span className="ob-alt-cta" onClick={loadSample}>Charger l'exemple →</span>
         </div>
 
         <div className="ob-foot">

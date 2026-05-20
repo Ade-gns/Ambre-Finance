@@ -19,50 +19,6 @@ const KIND_STYLES = {
   duplicate: { bg: "rgba(122,92,58,0.10)",   fg: "#7a5c3a" },
 };
 
-const INITIAL_ALERTS = [
-  { id: 1, day: "Aujourd'hui · 14 mai", thisWeek: true, month: "Mai 2026",
-    time: "14:32", kind: "threshold", name: "Loisirs · seuil 85 %",
-    cat: { label: "Loisirs", color: "#a85a48" },
-    msg: "97 % du budget mensuel atteint (96,80 € / 100 €). Il reste 17 jours.",
-    source: "Le Petit Café · −14,20 €",
-    state: "unread", cta: "Ajuster le budget" },
-  { id: 2, day: "Aujourd'hui · 14 mai", thisWeek: true, month: "Mai 2026",
-    time: "10:11", kind: "anomaly", name: "Transaction inhabituelle détectée",
-    cat: { label: "Loisirs", color: "#a85a48" },
-    msg: "FNAC.COM · 229,90 € — montant supérieur à votre moyenne pour cette catégorie.",
-    source: "11 mai · Carte BNP",
-    state: "unread", cta: "Voir la transaction" },
-  { id: 3, day: "Hier · 13 mai", thisWeek: true, month: "Mai 2026",
-    time: "18:04", kind: "event", name: "Salaire reçu",
-    cat: { label: "Revenus", color: "#6b7a4f" },
-    msg: "Virement Dupont SAS · +2 560,00 €. Détecté automatiquement comme récurrent.",
-    source: "Compte courant BNP",
-    state: "read", cta: "Voir le détail" },
-  { id: 4, day: "Hier · 13 mai", thisWeek: true, month: "Mai 2026",
-    time: "09:47", kind: "threshold", name: "Alimentation · seuil 90 %",
-    cat: { label: "Alimentation", color: "#b8693d" },
-    msg: "450 € dépensés sur 500 € de budget. Vous êtes dans la trajectoire moyenne.",
-    source: "Carrefour Market · −52,34 €",
-    state: "read", cta: "Ajuster le budget" },
-  { id: 5, day: "Cette semaine · 11 mai", thisWeek: true, month: "Mai 2026",
-    time: "Dim. 22h", kind: "event", name: "Nouvel abonnement détecté",
-    cat: { label: "Abonnements", color: "#cd8459" },
-    msg: "« SPOTIFY » apparaît pour la 3e fois consécutive — créer une règle Abonnements ?",
-    source: "Spotify Premium · 10,99 €/mois",
-    state: "read", cta: "Créer la règle" },
-  { id: 6, day: "Cette semaine · 11 mai", thisWeek: true, month: "Mai 2026",
-    time: "Sam. 19h", kind: "duplicate", name: "Doublon potentiel",
-    cat: { label: "Loisirs", color: "#a85a48" },
-    msg: "Deux transactions Cinéma MK2 identiques en 48h. Vérifier s'il s'agit d'un doublon.",
-    source: "10 mai · 22,00 € · 22,00 €",
-    state: "read", cta: "Comparer" },
-  { id: 7, day: "07 – 09 mai", thisWeek: false, month: "Mai 2026",
-    time: "09/05 · 11:20", kind: "anomaly", name: "Catégorie inhabituelle",
-    cat: { label: "Santé", color: "#9d8b73" },
-    msg: "Premier mouvement dans la catégorie Santé ce mois — créer un budget ?",
-    source: "Pharmacie de l'Hôtel · −22,50 €",
-    state: "archived", cta: "Définir un budget" },
-];
 
 const FILTERS = [
   { key: "all",      label: "Toutes" },
@@ -103,7 +59,7 @@ function AlertKindIcon({ kind }) {
 }
 
 export default function Alerts() {
-  const [alerts, setAlerts] = useLocalStorage("alerts", INITIAL_ALERTS);
+  const [alerts, setAlerts] = useLocalStorage("alerts", []);
   const [filter, setFilter] = useState("all");
   const navigate = useNavigate();
   const [catOpen, setCatOpen] = useState(false);
