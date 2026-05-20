@@ -4,8 +4,8 @@
    3. success — confirmation et prochaines étapes
    4. error   — erreur de lecture + cas fréquents */
 
-import { useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useRef, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useTransactions, useImportHistory, normalizeTransaction } from "../lib/store";
 import { fmtEUR } from "../lib/chartPrimitives";
 import {
@@ -177,6 +177,7 @@ function fmtSize(bytes) {
    ───────────────────────────────────────────────────────────────── */
 export default function Import() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [transactions, setTransactions] = useTransactions();
   const [importHistory, setImportHistory] = useImportHistory();
   const [state, setState]           = useState("empty");
@@ -225,6 +226,11 @@ export default function Import() {
       setState("error");
     }
   };
+
+  // Fichier transmis depuis l'onboarding via router state → lancer le parsing directement
+  useEffect(() => {
+    if (location.state?.file) handleFile(location.state.file);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleConfirm() {
     if (!parsedTxs) return;

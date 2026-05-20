@@ -124,7 +124,7 @@ export default function Onboarding() {
 
   function handleFiles(files) {
     if (!files || files.length === 0) return;
-    navigate("/import");
+    navigate("/import", { state: { file: files[0] } });
   }
 
   function loadSample() {
