@@ -1,23 +1,13 @@
 import { useState, useEffect } from "react";
+import { dbGet, dbSet } from "./db";
 
-const PREFIX = "ambre_";
+export function save(key, value) { dbSet(key, value); }
+export function load(key, defaultValue) { return dbGet(key, defaultValue); }
 
-export function save(key, value) {
-  try { localStorage.setItem(PREFIX + key, JSON.stringify(value)); } catch {}
-}
-
-export function load(key, defaultValue) {
-  try {
-    const raw = localStorage.getItem(PREFIX + key);
-    return raw !== null ? JSON.parse(raw) : defaultValue;
-  } catch { return defaultValue; }
-}
-
-/* Hook — remplace useState, persiste automatiquement dans localStorage. */
 export function useLocalStorage(key, defaultValue) {
-  const [state, setState] = useState(() => load(key, defaultValue));
+  const [state, setState] = useState(() => dbGet(key, defaultValue));
   useEffect(() => {
-    save(key, state);
+    dbSet(key, state);
     window.dispatchEvent(new CustomEvent("ambre:storage", { detail: { key, value: state } }));
   }, [key, state]);
   return [state, setState];

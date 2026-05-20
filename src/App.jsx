@@ -1,14 +1,3 @@
-// App.jsx — Routeur principal + layout.
-// L'écran Onboarding est plein écran (pas de sidebar) parce que l'app n'est pas encore initialisée.
-// Tous les autres écrans utilisent le Layout standard avec sidebar.
-
-// Nettoyage synchrone avant tout render : si la session précédente était en mode exemple,
-// on efface les transactions pour retomber sur l'Onboarding au redémarrage.
-if (typeof window !== "undefined" && localStorage.getItem("ambre.sampleMode") === "1") {
-  localStorage.removeItem("ambre.sampleMode");
-  localStorage.removeItem("transactions");
-}
-
 import { useState, useEffect } from "react";
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { load } from "./lib/storage";
