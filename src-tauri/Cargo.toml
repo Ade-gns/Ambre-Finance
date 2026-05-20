@@ -1,8 +1,8 @@
 [package]
 name = "ambre-app"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Gestionnaire de finances personnelles desktop — Tauri 2, React 19, SQLite"
+authors = ["Ade-gns"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

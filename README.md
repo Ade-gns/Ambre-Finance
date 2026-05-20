@@ -76,8 +76,8 @@ Installer [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-
 ### 1. Cloner le dépôt
 
 ```bash
-git clone https://github.com/Ade-gns/Ambre-Projet-app.git
-cd Ambre-Projet-app
+git clone https://github.com/Ade-gns/Ambre-Finance.git
+cd Ambre-Finance
 ```
 
 ### 2. Installer les dépendances JS
