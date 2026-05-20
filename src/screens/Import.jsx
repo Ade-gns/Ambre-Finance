@@ -141,6 +141,7 @@ export default function Import() {
 
   function handleConfirm() {
     if (!parsedTxs) return;
+    localStorage.removeItem("ambre.sampleMode");
     const normalized = parsedTxs.map(t => normalizeTransaction(t));
     setTransactions(prev => {
       const ids = new Set(prev.map(t => String(t.id)));

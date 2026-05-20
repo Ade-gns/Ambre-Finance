@@ -127,6 +127,7 @@ export default function Onboarding() {
   }
 
   function loadSample() {
+    localStorage.setItem("ambre.sampleMode", "1");
     setTransactions(SAMPLE_TRANSACTIONS);
     navigate("/");
   }
