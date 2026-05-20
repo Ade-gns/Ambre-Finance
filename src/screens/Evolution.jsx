@@ -168,9 +168,10 @@ export default function Evolution() {
             <span style={{ textAlign: "right" }}>Δ</span>
           </div>
           <div style={{ overflow: "auto" }}>
-            {CATEGORIES.map(c => {
-              const last = c.amount * (0.88 + (c.id.charCodeAt(0) % 7) * 0.04);
-              const delta = (c.amount - last) / last;
+            {catSeries.map(c => {
+              const cur  = c.values[c.values.length - 1] ?? 0;
+              const last = cur * (0.88 + (c.id.charCodeAt(0) % 7) * 0.04);
+              const delta = last > 0 ? (cur - last) / last : 0;
               return (
                 <div key={c.id} className="ev-cmp-row">
                   <span className="ev-cmp-l">
@@ -178,7 +179,7 @@ export default function Evolution() {
                     {c.label}
                   </span>
                   <span className="ev-cmp-v">{fmtEUR(last, 0)}</span>
-                  <span className="ev-cmp-v">{fmtEUR(c.amount, 0)}</span>
+                  <span className="ev-cmp-v">{fmtEUR(cur, 0)}</span>
                   <span className={"ev-cmp-d " + (Math.abs(delta) < 0.01 ? "flat" : delta > 0 ? "up" : "down")}>
                     {Math.abs(delta) < 0.01
                       ? "—"
@@ -243,6 +244,7 @@ export default function Evolution() {
 
 /* Graphique hero — dépenses + revenus + année précédente */
 function EvolutionHeroChart({ months, prev }) {
+  if (!months || months.length < 2) return null;
   const width = 1320, height = 230;
   const padX = 44, padY = 18, padR = 18, padB = 26;
   const innerW = width - padX - padR;

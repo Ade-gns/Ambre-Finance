@@ -1,0 +1,27 @@
+# Dépendances
+node_modules/
+
+# Build Vite
+dist/
+
+# Build Tauri
+src-tauri/target/
+
+# Données utilisateur locales (ne jamais committer)
+*.db
+*.sqlite
+
+# Environnement
+.env
+.env.local
+.env.*.local
+
+# Éditeurs
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

@@ -8,6 +8,7 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTransactions } from "../lib/store";
+import { dbSet } from "../lib/db";
 import { IcLock, IcTag, IcChart, IcUpload } from "../lib/icons";
 
 const SAMPLE_RAW = [
@@ -127,7 +128,7 @@ export default function Onboarding() {
   }
 
   function loadSample() {
-    localStorage.setItem("ambre.sampleMode", "1");
+    dbSet("sampleMode", "1");
     setTransactions(SAMPLE_TRANSACTIONS);
     navigate("/");
   }
