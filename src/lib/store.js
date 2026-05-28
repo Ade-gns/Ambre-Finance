@@ -19,13 +19,14 @@ const DOW_FR      = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
 export function autoCat(lbl, amt) {
   if (amt > 0) return "inc";
   const l = (lbl || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-  if (/loyer|rent|charges loc|sci |syndic|fonciere/.test(l)) return "loy";
-  if (/carrefour|monoprix|auchan|leclerc|lidl|aldi|intermarche|franprix|casino |boulangerie|patisserie|epicerie|biocoop|naturalia|supermarche/.test(l)) return "alim";
-  if (/sncf|ratp|navigo|uber|blablacar|total.energ|autoroute|vinci|sanef|peage|velib|lime|tier/.test(l)) return "tra";
-  if (/netflix|spotify|amazon.prime|disney|deezer|apple.one|canal\+|youtube|hbo|playstation|microsoft 365|adobe|github|notion/.test(l)) return "abo";
-  if (/pharmacie|medec|docteur|hopital|clinique|dentiste|opticien|kine|mutuelle|secu|ameli/.test(l)) return "san";
-  if (/cinema|concert|theatre|musee|fnac|sport|salle de|activite/.test(l)) return "loi";
-  if (/livret|epargne|assurance.vie|pel|cer|placement/.test(l)) return "epa";
+  if (/loyer|charges loc|sci |syndic|fonciere|assurance hab|engie|edf |gaz de france|eau potable|veolia|suez|gardiennage|copropr/.test(l)) return "loy";
+  if (/netflix|spotify|amazon.?prime|amazon music|disney\+|deezer|apple music|apple tv|apple one|canal\+|youtube premium|hbo|playstation plus|ps plus|microsoft 365|adobe |github|notion|free.?mobile|freemobile|sfr |orange |bouygues|sosh|icloud|dropbox|nordvpn|ovh |hetzner/.test(l)) return "abo";
+  if (/sncf|ratp|navigo|blablacar|autoroute|vinci|sanef|peage|velib|lime |airfrance|air france|ryanair|easyjet|ouigo|ouibus|flixbus|parking|stationnement|transdev|keolis|thalys|eurostar/.test(l)) return "tra";
+  if (/uber(?!.*eat)|bolt(?!.*food)|taxi|vtc|kapten|heetch/.test(l)) return "tra";
+  if (/carrefour|monoprix|auchan|leclerc|lidl|aldi|intermarche|franprix|casino |boulangerie|patisserie|epicerie|biocoop|naturalia|supermarche|marche |picard|grand frais|traiteur|metro cash|fresh|g20 |simply|cora |match /.test(l)) return "alim";
+  if (/pharmacie|medec|docteur|hopital|clinique|dentiste|opticien|kine|mutuelle|secu|ameli|cpam|infirmier|psychologue|orthophon|cabinet.?med|chirurg|osteo|dermato/.test(l)) return "san";
+  if (/restaurant|brasserie|bistrot?|cafe |bar |pizzeria|kebab|sushi|mcdo|mcdonald|burger king|kfc|subway|domino|pizza|deliveroo|uber.?eat|just.?eat|foodora|cinema|allocine|concert|theatre|musee|salle.?sport|amazon|ebay|zalando|shein|asos|vinted|booking|airbnb|hotel|etsy|fnac|cultura/.test(l)) return "loi";
+  if (/livret|epargne|assurance.vie|pel |cer |placement|bourse|sicav|fcpi|virement.?epargne/.test(l)) return "epa";
   return "aut";
 }
 
@@ -110,3 +111,16 @@ export function computeCatTotals(transactions, cats, monthKey) {
 export function useTransactions()   { return useLocalStorage("transactions",   []); }
 export function useCategories()     { return useLocalStorage("categories",     DEFAULT_CATS); }
 export function useImportHistory()  { return useLocalStorage("importHistory",  []); }
+export function useAutoRules()      { return useLocalStorage("autoRules",      []); }
+
+export function applyRules(rules, lbl) {
+  if (!rules?.length || !lbl) return null;
+  const n = lbl.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  for (const rule of rules) {
+    if (rule.active === false) continue;
+    const p = (rule.pattern || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    if (!p) continue;
+    if (rule.matchType === "exact" ? n === p : n.includes(p)) return rule.catId;
+  }
+  return null;
+}

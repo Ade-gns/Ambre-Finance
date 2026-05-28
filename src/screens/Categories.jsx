@@ -3,9 +3,9 @@
    2. detail — vue par catégorie (KPIs, courbe, sous-cats, marchands, transactions)
    3. empty  — catégorie créée mais sans transactions (avec suggestions) */
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useTransactions, useCategories, computeCatTotals, DEFAULT_CATS } from "../lib/store";
+import { useTransactions, useCategories, useAutoRules, applyRules, computeCatTotals, DEFAULT_CATS } from "../lib/store";
 import { fmtEUR, pathSmooth } from "../lib/chartPrimitives";
 import {
   IcSearch, IcCalendar, IcFilter, IcArrowR, IcChevDn,
@@ -95,27 +95,56 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
   const updateCatProp = (id, prop, val) =>
     setCatEdits(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [prop]: val } }));
 
-  // Rules state
-  const [rules, setRules] = useState([
-    { id: 1, when: "libellé contient", op: "carrefour",                 to: "alim", auto: 14, last: "14/05", active: true },
-    { id: 2, when: "libellé contient", op: "monoprix",                  to: "alim", auto: 8,  last: "07/05", active: true },
-    { id: 3, when: "libellé contient", op: "boulangerie OU patisserie", to: "alim", auto: 12, last: "10/05", active: true },
-    { id: 4, when: "marchand =",       op: "Auchan Drive",              to: "alim", auto: 6,  last: "05/05", active: true },
-    { id: 5, when: "libellé contient", op: "fnac.com",                  to: "loi",  auto: 3,  last: "11/05", active: true },
-  ]);
-  const [editRuleId, setEditRuleId]   = useState(null);
-  const [editDraft, setEditDraft]     = useState({});
+  // Rules — connectées au store partagé avec l'import
+  const [autoRules, setAutoRules] = useAutoRules();
+  const [transactions] = useTransactions();
+  const [editRuleId, setEditRuleId]     = useState(null);
+  const [editDraft, setEditDraft]       = useState({});
   const [ruleFormOpen, setRuleFormOpen] = useState(false);
-  const [newWhen, setNewWhen]         = useState("libellé contient");
-  const [newOp, setNewOp]             = useState("");
+  const [newWhen, setNewWhen]           = useState("libellé contient");
+  const [newOp, setNewOp]               = useState("");
 
-  const toggleRule  = id => setRules(prev => prev.map(r => r.id === id ? { ...r, active: !r.active } : r));
-  const deleteRule  = id => setRules(prev => prev.filter(r => r.id !== id));
-  const startEditRule = r => { setEditRuleId(r.id); setEditDraft({ when: r.when, op: r.op }); };
-  const saveEditRule  = () => { setRules(prev => prev.map(r => r.id === editRuleId ? { ...r, ...editDraft } : r)); setEditRuleId(null); };
+  const whenFromMatchType = mt => mt === "exact" ? "marchand =" : "libellé contient";
+  const matchTypeFromWhen = w  => w  === "marchand =" ? "exact" : "contains";
+
+  // Calcule pour chaque règle : nb de transactions matchées + date de la dernière
+  const ruleStats = useMemo(() => {
+    const stats = {};
+    autoRules.forEach(rule => {
+      const matched = transactions.filter(t => applyRules([rule], t.lbl) === rule.catId);
+      stats[rule.id] = {
+        auto: matched.length,
+        last: matched.length > 0 ? (matched[0].d?.slice(0, 5) || "—") : "—",
+      };
+    });
+    return stats;
+  }, [autoRules, transactions]);
+
+  const toUiRule = rule => ({
+    ...rule,
+    when:   whenFromMatchType(rule.matchType),
+    op:     rule.pattern,
+    to:     rule.catId,
+    auto:   ruleStats[rule.id]?.auto || 0,
+    last:   ruleStats[rule.id]?.last || "—",
+  });
+
+  const toggleRule    = id => setAutoRules(prev => prev.map(r => r.id === id ? { ...r, active: !(r.active !== false) } : r));
+  const deleteRule    = id => setAutoRules(prev => prev.filter(r => r.id !== id));
+  const startEditRule = r  => { setEditRuleId(r.id); setEditDraft({ when: r.when, op: r.op }); };
+  const saveEditRule  = () => {
+    setAutoRules(prev => prev.map(r => r.id === editRuleId
+      ? { ...r, pattern: editDraft.op, matchType: matchTypeFromWhen(editDraft.when) }
+      : r));
+    setEditRuleId(null);
+  };
   const createRule = () => {
     if (!newOp.trim()) return;
-    setRules(prev => [...prev, { id: Date.now(), when: newWhen, op: newOp.trim(), to: selected?.id ?? "alim", auto: 0, last: "—", active: true }]);
+    setAutoRules(prev => [...prev, {
+      id: Date.now(), pattern: newOp.trim(), catId: selected?.id ?? "alim",
+      matchType: matchTypeFromWhen(newWhen), active: true,
+      createdAt: new Date().toISOString(),
+    }]);
     setNewOp(""); setNewWhen("libellé contient"); setRuleFormOpen(false);
   };
 
@@ -162,7 +191,7 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
     setNewOpen(false);
   };
 
-  const catRules = rules.filter(r => r.to === selected.id);
+  const catRules = autoRules.filter(r => r.catId === selected.id).map(toUiRule);
 
   const colorOptions = ["#b8693d","#cd8459","#a85a48","#3d2817","#6b7a4f","#7a5c3a","#9d8b73","#d4a76a"];
 
@@ -432,7 +461,7 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
               </div>
             ) : catRules.map(r => (
               <div key={r.id} className="cm-rule">
-                <span className={"cm-rule-toggle" + (r.active ? "" : " off")}
+                <span className={"cm-rule-toggle" + (r.active !== false ? "" : " off")}
                       onClick={() => toggleRule(r.id)}
                       style={{ cursor: "pointer", flexShrink: 0 }}/>
                 {editRuleId === r.id ? (
@@ -457,7 +486,7 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
                   </div>
                 ) : (
                   <div className="cm-rule-body">
-                    <div className="cm-rule-cond" style={{ opacity: r.active ? 1 : 0.5 }}>
+                    <div className="cm-rule-cond" style={{ opacity: r.active !== false ? 1 : 0.5 }}>
                       Si {r.when} <strong>« {r.op} »</strong>
                     </div>
                     <div className="cm-rule-meta">

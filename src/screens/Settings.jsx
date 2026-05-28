@@ -8,6 +8,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useLocalStorage } from "../lib/storage";
+import { useTransactions, useCategories, useImportHistory, useAutoRules, DEFAULT_CATS } from "../lib/store";
 import { fmtEUR } from "../lib/chartPrimitives";
 import {
   IcSettings, IcWallet, IcTag, IcBell, IcLock, IcSun, IcDot,
@@ -807,6 +808,10 @@ function SettingsBackup() {
   const [backupRun, setBackupRun]     = useState("idle");   // idle | running | done
   const [exportDone, setExportDone]   = useState(null);     // null | ".csv" | ...
   const [danger, setDanger]           = useState(null);     // null | "tx" | "cat" | "all"
+  const [transactions, setTransactions]   = useTransactions();
+  const [categories,   setCategories]     = useCategories();
+  const [,             setImportHistory]  = useImportHistory();
+  const [autoRules,    setAutoRules]      = useAutoRules();
   const [dbPath, setDbPath]           = useState("ambre.db");
   const [backupFolder, setBackupFolder] = useState("~/Documents/Ambre-backups/");
   const [restoreMsg, setRestoreMsg]   = useState(null);
@@ -824,14 +829,47 @@ function SettingsBackup() {
     setTimeout(() => { setBackupRun("done"); setTimeout(() => setBackupRun("idle"), 2500); }, 1800);
   };
 
+  const dlText = (content, filename, mime = "text/plain") => {
+    const a = document.createElement("a");
+    a.href = `data:${mime};charset=utf-8,` + encodeURIComponent(content);
+    a.download = filename;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   const handleExport = fmt => {
-    setExportDone(fmt);
-    setTimeout(() => setExportDone(null), 2000);
+    if (fmt === ".csv") {
+      const header = "Date,Libellé,Sous-titre,Compte,Catégorie,Mode,Montant";
+      const rows = transactions.map(t =>
+        [t.d, `"${(t.lbl||"").replace(/"/g,'""')}"`, `"${(t.sub||"").replace(/"/g,'""')}"`,
+         t.acc, t.cat, t.mode, t.amt].join(",")
+      );
+      dlText(header + "\n" + rows.join("\n"), "ambre-transactions.csv", "text/csv");
+      setExportDone(fmt);
+      setTimeout(() => setExportDone(null), 2500);
+    } else if (fmt === ".json") {
+      const data = { transactions, categories, autoRules, exportedAt: new Date().toISOString() };
+      dlText(JSON.stringify(data, null, 2), "ambre-export.json", "application/json");
+      setExportDone(fmt);
+      setTimeout(() => setExportDone(null), 2500);
+    } else {
+      setExportDone(fmt + "_na");
+      setTimeout(() => setExportDone(null), 2500);
+    }
   };
 
   const handleDanger = key => {
-    if (danger === key) { setDanger(null); }
-    else { setDanger(key); setTimeout(() => setDanger(d => d === key ? null : d), 3000); }
+    if (danger === key) {
+      if (key === "tx")  { setTransactions([]); setImportHistory([]); localStorage.removeItem("ambre.sampleMode"); }
+      if (key === "cat") { setCategories(DEFAULT_CATS); }
+      if (key === "all") { setTransactions([]); setCategories(DEFAULT_CATS); setAutoRules([]); setImportHistory([]); localStorage.removeItem("ambre.sampleMode"); }
+      setDanger(null);
+    } else {
+      setDanger(key);
+      setTimeout(() => setDanger(d => d === key ? null : d), 3000);
+    }
   };
 
   return (
@@ -996,20 +1034,22 @@ function SettingsBackup() {
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           {[
-            { fmt: ".csv",  desc: "Une ligne par transaction" },
-            { fmt: ".json", desc: "Structure complète, règles incluses" },
-            { fmt: ".ofx",  desc: "Compatible MoneyDance, GnuCash" },
-            { fmt: ".pdf",  desc: "Rapport mensuel lisible" },
+            { fmt: ".csv",  desc: "Une ligne par transaction",        available: true },
+            { fmt: ".json", desc: "Structure complète, règles incluses", available: true },
+            { fmt: ".ofx",  desc: "Compatible MoneyDance, GnuCash",   available: false },
+            { fmt: ".pdf",  desc: "Rapport mensuel lisible",           available: false },
           ].map(f => {
             const done = exportDone === f.fmt;
+            const na   = exportDone === f.fmt + "_na";
             return (
               <button key={f.fmt} className="stg-btn" onClick={() => handleExport(f.fmt)} style={{
                 padding: "10px 14px", flexDirection: "column", alignItems: "flex-start", gap: 2,
-                borderColor: done ? "rgba(107,122,79,0.4)" : undefined,
+                borderColor: done ? "rgba(107,122,79,0.4)" : na ? "rgba(168,90,72,0.3)" : undefined,
+                opacity: f.available ? 1 : 0.55,
               }}>
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 13,
-                               color: done ? "var(--sage-500)" : "var(--amber-500)" }}>
-                  {done ? "✓ exporté" : f.fmt}
+                               color: done ? "var(--sage-500)" : na ? "var(--rose-500)" : f.available ? "var(--amber-500)" : "var(--ink-500)" }}>
+                  {done ? "✓ exporté" : na ? "bientôt" : f.fmt}
                 </span>
                 <span style={{ fontSize: 11, color: "var(--ink-500)" }}>{f.desc}</span>
               </button>
