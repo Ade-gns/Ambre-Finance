@@ -339,6 +339,11 @@ export default function Dashboard() {
                 {expDelta > 0 ? "+" : ""}{Math.round(expDelta * 100)} % vs {prevLabel}
               </span>
             )}
+            {totalInc > 0 && (
+              <span className={"atc-pill " + (net >= 0 ? "good" : "warn")}>
+                Épargne · {Math.round(Math.max(0, net / totalInc) * 100)} %
+              </span>
+            )}
             {isCurrentMonth && activeKey === latestKey && todayDay > 0 && (
               <span className="atc-pill">Projection · {fmtEUR(totalExp + (totalExp / todayDay) * (daysInMonth - todayDay), 0)}</span>
             )}
@@ -348,14 +353,18 @@ export default function Dashboard() {
         <div className="atc-card" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
             <div className="atc-mini-l">Budget mensuel</div>
-            <div className="atc-mini-v">{Math.round(pct * 100)} %</div>
+            <div className="atc-mini-v" style={{ color: pct > 1 ? "var(--rose-500)" : undefined }}>{Math.round(pct * 100)} %</div>
           </div>
           <div style={{ display: "flex", justifyContent: "center", margin: "-8px 0" }}>
             <RingGauge value={pct} size={130} thickness={10}
-                       color="var(--amber-500)" track="rgba(184,105,61,0.12)"/>
+                       color={pct > 1 ? "var(--rose-500)" : "var(--amber-500)"}
+                       track="rgba(184,105,61,0.12)"/>
           </div>
-          <div className="atc-mini-d atc-delta-down">
-            <IcDot size={10}/>{fmtEUR(budget - totalExp, 0)} restants
+          <div className={"atc-mini-d " + (pct > 1 ? "atc-delta-up" : "atc-delta-down")}>
+            <IcDot size={10}/>
+            {pct > 1
+              ? `Dépassé de ${fmtEUR(totalExp - budget, 0)}`
+              : `${fmtEUR(budget - totalExp, 0)} restants`}
           </div>
         </div>
 
@@ -376,9 +385,18 @@ export default function Dashboard() {
             <div className="atc-mini-v" style={{ color: net >= 0 ? "var(--sage-500)" : "var(--rose-500)" }}>
               {net >= 0 ? "+" : ""}{fmtEUR(net, 0)}
             </div>
-            <div className={"atc-mini-d " + (net >= 0 ? "atc-delta-down" : "atc-delta-up")}>
-              {prev ? <><IcArrowDn size={11}/>{fmtEUR(Math.abs(net - (prev.inc - prev.exp)), 0)} € vs {prevLabel}</> : <IcDot size={10}/>}
-            </div>
+            {(() => {
+              const prevNet = prev ? prev.inc - prev.exp : null;
+              const delta   = prevNet != null ? net - prevNet : null;
+              const better  = delta != null && delta >= 0;
+              return (
+                <div className={"atc-mini-d " + (delta == null ? "" : better ? "atc-delta-down" : "atc-delta-up")}>
+                  {delta != null
+                    ? <>{better ? <IcArrowUp size={11}/> : <IcArrowDn size={11}/>}{better ? "+" : ""}{fmtEUR(delta, 0)} vs {prevLabel}</>
+                    : <IcDot size={10}/>}
+                </div>
+              );
+            })()}
           </div>
           <Sparkline data={monthly.map(m => m.inc - m.exp)} color="#b8693d" width={220} height={44}/>
         </div>
@@ -500,19 +518,36 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="atc-cats">
-                {catTotals.slice(0, 6).map(c => (
-                  <div key={c.id} className="atc-cat-card" onClick={() => navigate("/categories")}
-                       style={{ cursor: "pointer" }}>
-                    <div className="atc-cat-h">
-                      <span className="amb-dot" style={{ background: c.color }}/>
-                      {c.label}
+                {catTotals.slice(0, 6).map(c => {
+                  const over      = c.budget > 0 && c.amount > c.budget;
+                  const budgetPct = c.budget > 0 ? Math.min(c.amount / c.budget, 1) : 0;
+                  return (
+                    <div key={c.id} className="atc-cat-card" onClick={() => navigate("/categories")}
+                         style={{ cursor: "pointer" }}>
+                      <div className="atc-cat-h">
+                        <span className="amb-dot" style={{ background: c.color }}/>
+                        {c.label}
+                      </div>
+                      <div className="atc-cat-v">{fmtEUR(c.amount, 0)}</div>
+                      {c.budget > 0 && (
+                        <div style={{ height: 3, background: "var(--grid-line)", borderRadius: 999 }}>
+                          <div style={{
+                            width: `${budgetPct * 100}%`, height: "100%", borderRadius: 999,
+                            background: over ? "var(--rose-500)" : c.color,
+                          }}/>
+                        </div>
+                      )}
+                      <div className="atc-cat-foot">
+                        <span>{Math.round(c.share * 100)}% du mois</span>
+                        {c.budget > 0 && (
+                          <span style={{ color: over ? "var(--rose-500)" : "var(--ink-400)" }}>
+                            {over ? `+${fmtEUR(c.amount - c.budget, 0)}` : `/ ${fmtEUR(c.budget, 0)}`}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="atc-cat-v">{fmtEUR(c.amount, 0)}</div>
-                    <div className="atc-cat-foot">
-                      <span>{Math.round(c.share * 100)}% du mois</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
