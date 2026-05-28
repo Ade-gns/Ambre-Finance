@@ -6,9 +6,9 @@
    5. app  — Apparence (thème, couleur d'accent, typographie)
    6. abt  — À propos */
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useLocalStorage } from "../lib/storage";
-import { useTransactions, useCategories, useImportHistory, useAutoRules, DEFAULT_CATS } from "../lib/store";
+import { useTransactions, useCategories, useImportHistory, useAutoRules, useAlertDefs, DEFAULT_CATS, txMonthKey } from "../lib/store";
 import { fmtEUR } from "../lib/chartPrimitives";
 import {
   IcSettings, IcWallet, IcTag, IcBell, IcLock, IcSun, IcDot,
@@ -546,14 +546,46 @@ function SettingsCategoriesRedirect() {
 function SettingsAlerts() {
   const [channels, setChannels] = useLocalStorage("stg.channels", { systeme: true, os: true, offline: false });
   const [alertFilter, setAlertFilter] = useState("Toutes");
-  const [alerts, setAlerts] = useState([
-    { id: 1, name: "Loyer encaissé",            cond: "Réception d'un virement contenant « salaire »",   thr: "✓ détection",   now: "12 mai",   state: "ok",   on: true,  color: "#6b7a4f" },
-    { id: 2, name: "Budget Loisirs proche",     cond: "Dépenses Loisirs ≥ 85 % du budget mensuel",        thr: "85 / 100 €",    now: "96,80 €",  state: "warn", on: true,  color: "#a85a48" },
-    { id: 3, name: "Budget Alimentation",       cond: "Dépenses Alimentation ≥ 90 % du budget mensuel",   thr: "450 / 500 €",   now: "487 €",    state: "warn", on: true,  color: "#b8693d" },
-    { id: 4, name: "Transaction inhabituelle",  cond: "Dépense > 200 € en dehors des récurrentes",        thr: "200 €",         now: "—",        state: "ok",   on: true,  color: "#9d8b73" },
-    { id: 5, name: "Solde courant bas",         cond: "Solde courant < 500 €",                            thr: "500 €",         now: "3 284 €",  state: "ok",   on: false, color: "#3d2817" },
-    { id: 6, name: "Abonnement nouveau",        cond: "Nouvelle transaction récurrente détectée",         thr: "— auto —",      now: "—",        state: "ok",   on: true,  color: "#cd8459" },
-  ]);
+  const [alerts, setAlerts]  = useAlertDefs();
+  const [transactions]       = useTransactions();
+  const [categories]         = useCategories();
+
+  // Évalue chaque règle sur le mois en cours pour afficher l'état réel
+  const evalLive = useMemo(() => {
+    const now    = new Date();
+    const curKey = String(now.getMonth() + 1).padStart(2, "0") + "/" + now.getFullYear();
+    const monthTxs = transactions.filter(t => txMonthKey(t.d) === curKey);
+    const fmt = n => Math.abs(n).toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+
+    return Object.fromEntries((alerts || []).map(a => {
+      if (a.type === "budget_pct" && a.catId) {
+        const cat = categories.find(c => c.id === a.catId);
+        if (cat?.budget) {
+          const spent = monthTxs.filter(t => t.cat === a.catId && t.amt < 0).reduce((s, t) => s + Math.abs(t.amt), 0);
+          const pct   = Math.round(spent / cat.budget * 100);
+          return [a.id, { state: pct >= (a.threshold ?? 80) ? "warn" : "ok", now: fmt(spent) }];
+        }
+      }
+      if (a.type === "income") {
+        const found = monthTxs.find(t => t.cat === "inc");
+        return [a.id, { state: "ok", now: found ? (found.d?.slice(0, 5) || "✓") : "—" }];
+      }
+      if (a.type === "large_tx") {
+        const thr   = a.threshold ?? 200;
+        const large = monthTxs.filter(t => t.amt < -thr && t.cat !== "loy" && t.cat !== "epa");
+        return [a.id, { state: large.length > 0 ? "warn" : "ok", now: large[0] ? fmt(Math.abs(large[0].amt)) : "—" }];
+      }
+      if (a.type === "duplicate") {
+        const seen = new Map(); let cnt = 0;
+        monthTxs.filter(t => t.amt < 0).forEach(t => {
+          const k = Math.abs(t.amt).toFixed(2);
+          if (seen.has(k)) cnt++; else seen.set(k, t);
+        });
+        return [a.id, { state: cnt > 0 ? "warn" : "ok", now: cnt > 0 ? `${cnt} doublon${cnt > 1 ? "s" : ""}` : "—" }];
+      }
+      return [a.id, { state: "ok", now: "—" }];
+    }));
+  }, [alerts, transactions, categories]);
   const templates = [
     { name: "Plafond mensuel global",   desc: "Quand le total dépensé dépasse X €",          ico: "€" },
     { name: "Sans dépense en 7 jours",  desc: "Une catégorie n'a aucune transaction sur 7 j", ico: "○" },
@@ -740,9 +772,9 @@ function SettingsAlerts() {
               <div className="stg-alert-cond">{a.cond}</div>
             </div>
             <span className="stg-alert-thr">Seuil · {a.thr}</span>
-            <span className={"stg-alert-state " + a.state}>
-              {a.state === "warn" ? "⚠ " : "○ "}
-              {a.now}
+            <span className={"stg-alert-state " + (evalLive[a.id]?.state || "ok")}>
+              {evalLive[a.id]?.state === "warn" ? "⚠ " : "○ "}
+              {evalLive[a.id]?.now || "—"}
             </span>
             <span className={"stg-tg" + (a.on ? "" : " off")} onClick={() => toggleAlert(a.id)}/>
             <button className="stg-btn" onClick={() => startEditAlert(a)}

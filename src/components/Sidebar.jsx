@@ -8,26 +8,35 @@ import {
   IcHome, IcImport, IcList, IcTag, IcChart, IcBell, IcSettings, IcSun, IcMoon, IcLock
 } from "../lib/icons";
 
-const navItems = [
+const BASE_NAV = [
   { to: "/",             icon: IcHome,     label: "Tableau" },
   { to: "/import",       icon: IcImport,   label: "Importer" },
   { to: "/transactions", icon: IcList,     label: "Transactions" },
   { to: "/categories",   icon: IcTag,      label: "Catégories" },
   { to: "/evolution",    icon: IcChart,    label: "Évolution" },
-  { to: "/alerts",       icon: IcBell,     label: "Alertes", badge: 2 },
+  { to: "/alerts",       icon: IcBell,     label: "Alertes" },
   { to: "/settings",     icon: IcSettings, label: "Paramètres" },
 ];
 
 export default function Sidebar() {
   const [theme, setTheme] = useState(() => load("stg.theme", "clair"));
+  const [unread, setUnread] = useState(() => {
+    const a = load("alerts", []);
+    return a.filter(x => x.state === "unread").length;
+  });
 
   useEffect(() => {
     const handler = e => {
       if (e.detail?.key === "stg.theme") setTheme(e.detail.value);
+      if (e.detail?.key === "alerts") setUnread((e.detail.value || []).filter(x => x.state === "unread").length);
     };
     window.addEventListener("ambre:storage", handler);
     return () => window.removeEventListener("ambre:storage", handler);
   }, []);
+
+  const navItems = BASE_NAV.map(item =>
+    item.to === "/alerts" && unread > 0 ? { ...item, badge: unread } : item
+  );
 
   function toggleTheme() {
     const next = theme === "sombre" ? "clair" : "sombre";

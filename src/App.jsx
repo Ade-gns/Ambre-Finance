@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
-import { load } from "./lib/storage";
-import { useTransactions } from "./lib/store";
+import { load, useLocalStorage } from "./lib/storage";
+import { useTransactions, useCategories, useAlertDefs, computeAlertNotifs, mergeAlertNotifs } from "./lib/store";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./screens/Dashboard";
 import Import from "./screens/Import";
@@ -11,6 +11,23 @@ import Evolution from "./screens/Evolution";
 import Settings from "./screens/Settings";
 import Alerts from "./screens/Alerts";
 import Onboarding from "./screens/Onboarding";
+
+/* Évalue les alertes à chaque changement de transactions et les persiste */
+function AlertEngine() {
+  const [transactions] = useTransactions();
+  const [categories]   = useCategories();
+  const [alertDefs]    = useAlertDefs();
+  const [, setAlerts]  = useLocalStorage("alerts", []);
+
+  useEffect(() => {
+    if (!transactions?.length) return;
+    const computed = computeAlertNotifs(transactions, categories, alertDefs);
+    if (!computed.length) return;
+    setAlerts(prev => mergeAlertNotifs(prev, computed));
+  }, [transactions, categories, alertDefs]); // eslint-disable-line
+
+  return null;
+}
 
 /* Applique data-theme sur <html> selon le choix stocké */
 function ThemeWatcher() {
@@ -79,6 +96,7 @@ export default function App() {
   return (
     <HashRouter>
       <ThemeWatcher />
+      <AlertEngine />
       <Routes>
         {/* Route plein écran — pas de sidebar */}
         <Route path="/onboarding" element={<OnboardingRoute />} />

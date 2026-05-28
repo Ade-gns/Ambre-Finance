@@ -113,6 +113,119 @@ export function useCategories()     { return useLocalStorage("categories",     D
 export function useImportHistory()  { return useLocalStorage("importHistory",  []); }
 export function useAutoRules()      { return useLocalStorage("autoRules",      []); }
 
+export const DEFAULT_ALERT_DEFS = [
+  { id: 1, type: "income",     name: "Revenu encaissé",           keyword: "salaire", thr: "✓ détection", cond: "Virement contenant « salaire » reçu ce mois",           on: true,  color: "#6b7a4f" },
+  { id: 2, type: "budget_pct", name: "Budget Loisirs proche",    catId: "loi",        threshold: 85,      thr: "85 %",  cond: "Dépenses Loisirs ≥ 85 % du budget mensuel",   on: true,  color: "#a85a48" },
+  { id: 3, type: "budget_pct", name: "Budget Alimentation",      catId: "alim",       threshold: 90,      thr: "90 %",  cond: "Dépenses Alimentation ≥ 90 % du budget mensuel", on: true, color: "#b8693d" },
+  { id: 4, type: "large_tx",   name: "Transaction inhabituelle", threshold: 200,       thr: "200 €",       cond: "Dépense > 200 € hors Logement et Épargne",               on: true,  color: "#9d8b73" },
+  { id: 5, type: "custom",     name: "Solde courant bas",        thr: "500 €",         cond: "Solde courant < 500 €",                                                     on: false, color: "#3d2817" },
+  { id: 6, type: "duplicate",  name: "Doublon potentiel",        thr: "— auto —",      cond: "Montant identique détecté en 48 h",                                         on: true,  color: "#cd8459" },
+];
+
+export function useAlertDefs() { return useLocalStorage("alertDefs", DEFAULT_ALERT_DEFS); }
+
+function fmtShort(n) {
+  return Math.abs(n).toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+}
+
+export function computeAlertNotifs(transactions, categories, alertDefs) {
+  if (!transactions?.length) return [];
+  const defs = alertDefs || DEFAULT_ALERT_DEFS;
+  const isOn = type => { const d = defs.find(x => x.type === type); return !d || d.on !== false; };
+
+  const now    = new Date();
+  const curKey = String(now.getMonth() + 1).padStart(2, "0") + "/" + now.getFullYear();
+  const curLabel = monthKeyLabel(curKey);
+  const monthTxs = transactions.filter(t => txMonthKey(t.d) === curKey);
+  if (!monthTxs.length) return [];
+
+  const catMap  = Object.fromEntries((categories || []).map(c => [c.id, c]));
+  const sevenAgo = new Date(now - 7 * 24 * 3600 * 1000);
+  const notifs  = [];
+
+  (categories || []).forEach(cat => {
+    if (!cat.budget || cat.id === "inc" || cat.id === "epa" || cat.id === "aut") return;
+    const def = defs.find(d => d.type === "budget_pct" && d.catId === cat.id);
+    if (def?.on === false) return;
+    const spent   = monthTxs.filter(t => t.cat === cat.id && t.amt < 0).reduce((s, t) => s + Math.abs(t.amt), 0);
+    const pct     = Math.round(spent / cat.budget * 100);
+    const trigPct = def?.threshold ?? 80;
+    if (pct >= 100) {
+      notifs.push({ id: `budget_${cat.id}_${curKey}_over`, kind: "threshold",
+        name: `Budget ${cat.label} dépassé`,
+        msg: `${fmtShort(spent)} dépensés sur ${fmtShort(cat.budget)} de budget (${pct} %).`,
+        cat: { label: cat.label, color: cat.color }, source: "Budget mensuel",
+        state: "unread", day: "Ce mois", time: "—", month: curLabel, thisWeek: true, cta: "Voir les dépenses" });
+    } else if (pct >= trigPct) {
+      notifs.push({ id: `budget_${cat.id}_${curKey}_warn`, kind: "threshold",
+        name: `Budget ${cat.label} à ${pct} %`,
+        msg: `${fmtShort(spent)} sur ${fmtShort(cat.budget)} de budget prévu ce mois.`,
+        cat: { label: cat.label, color: cat.color }, source: "Budget mensuel",
+        state: "unread", day: "Ce mois", time: "—", month: curLabel, thisWeek: true, cta: "Voir les dépenses" });
+    }
+  });
+
+  if (isOn("income")) {
+    const incomes = monthTxs.filter(t => t.cat === "inc");
+    if (incomes.length > 0) {
+      const total = incomes.reduce((s, t) => s + t.amt, 0);
+      notifs.push({ id: `income_${curKey}`, kind: "event",
+        name: "Revenu encaissé",
+        msg: `${fmtShort(total)} reçus ce mois (${incomes.length} virement${incomes.length > 1 ? "s" : ""}).`,
+        cat: { label: "Revenus", color: "#6b7a4f" }, source: incomes[0].lbl,
+        state: "unread", day: incomes[0].d?.slice(0, 5) || "Ce mois", time: "—",
+        month: curLabel, thisWeek: true, cta: "Voir les revenus" });
+    }
+  }
+
+  if (isOn("large_tx")) {
+    const thr = defs.find(d => d.type === "large_tx")?.threshold ?? 300;
+    monthTxs
+      .filter(t => t.amt < -thr && t.cat !== "loy" && t.cat !== "epa")
+      .filter(t => { const d = parseTxDate(t.d); return d && d >= sevenAgo; })
+      .slice(0, 5)
+      .forEach(t => {
+        const cat = catMap[t.cat] || { label: "Autre", color: "#9d8b73" };
+        notifs.push({ id: `large_${t.id}`, kind: "anomaly",
+          name: "Transaction inhabituelle",
+          msg: `${t.lbl} — ${fmtShort(Math.abs(t.amt))}. Vérifiez que c'est attendu.`,
+          cat: { label: cat.label, color: cat.color }, source: t.lbl,
+          state: "unread", day: t.d?.slice(0, 5) || "Récent", time: "—",
+          month: curLabel, thisWeek: true, cta: "Voir la transaction" });
+      });
+  }
+
+  if (isOn("duplicate")) {
+    const seen = new Map();
+    monthTxs.filter(t => t.amt < 0).forEach(t => {
+      const key = Math.abs(t.amt).toFixed(2);
+      if (seen.has(key)) {
+        const prev = seen.get(key);
+        const d1 = parseTxDate(t.d), d2 = parseTxDate(prev.d);
+        if (d1 && d2 && Math.abs(d1 - d2) <= 48 * 3600 * 1000 && String(t.id) !== String(prev.id)) {
+          const ids = [String(t.id), String(prev.id)].sort();
+          const cat = catMap[t.cat] || { label: "Autre", color: "#9d8b73" };
+          notifs.push({ id: `dup_${ids[0]}_${ids[1]}`, kind: "duplicate",
+            name: "Doublon potentiel",
+            msg: `${fmtShort(Math.abs(t.amt))} le ${t.d?.slice(0, 5) || "?"} et le ${prev.d?.slice(0, 5) || "?"}.`,
+            cat: { label: cat.label, color: cat.color }, source: t.lbl,
+            state: "unread", day: t.d?.slice(0, 5) || "Récent", time: "—",
+            month: curLabel, thisWeek: true, cta: "Comparer" });
+        }
+      } else {
+        seen.set(key, t);
+      }
+    });
+  }
+
+  return notifs;
+}
+
+export function mergeAlertNotifs(existing, computed) {
+  const ids = new Set((existing || []).map(a => a.id));
+  return [...computed.filter(n => !ids.has(n.id)), ...(existing || [])];
+}
+
 export function applyRules(rules, lbl) {
   if (!rules?.length || !lbl) return null;
   const n = lbl.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
