@@ -228,12 +228,22 @@ export function mergeAlertNotifs(existing, computed) {
 
 export function applyRules(rules, lbl) {
   if (!rules?.length || !lbl) return null;
-  const n = lbl.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const norm = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
+  const n = norm(lbl);
   for (const rule of rules) {
     if (rule.active === false) continue;
-    const p = (rule.pattern || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    const p = norm(rule.pattern || "");
     if (!p) continue;
     if (rule.matchType === "exact" ? n === p : n.includes(p)) return rule.catId;
   }
   return null;
+}
+
+export function reapplyRules(transactions, rules, forceAll = false) {
+  return transactions.map(t => {
+    if (!forceAll && t.cat && t.cat !== "aut") return t;
+    const cat = applyRules(rules, t.lbl);
+    return cat ? { ...t, cat } : t;
+  });
 }

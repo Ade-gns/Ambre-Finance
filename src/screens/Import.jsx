@@ -6,7 +6,7 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useTransactions, useImportHistory, normalizeTransaction, autoCat, applyRules, useAutoRules } from "../lib/store";
+import { useTransactions, useImportHistory, useCategories, normalizeTransaction, autoCat, applyRules, reapplyRules, useAutoRules } from "../lib/store";
 import { fmtEUR } from "../lib/chartPrimitives";
 import {
   IcCalendar, IcSearch, IcUpload, IcLock, IcArrowR, IcChevDn,
@@ -760,22 +760,23 @@ function ImportEmpty({ onFile, importHistory = [] }) {
    ───────────────────────────────────────────────────────────────── */
 function ImportPreview({ onConfirm, onCancel, txs, fileName, fileSize }) {
   const [autoRules, setAutoRules] = useAutoRules();
+  const [categories, setCategories] = useCategories();
   const [catOverrides, setCatOverrides] = useState({});
   const [catPickerRow, setCatPickerRow] = useState(null);
   const [filter, setFilter] = useState("all");
   const [rulesModalOpen, setRulesModalOpen] = useState(false);
   const [ruleDismissed, setRuleDismissed] = useState(false);
+  const [newCatForRow, setNewCatForRow] = useState(null);
+  const [newCatName, setNewCatName]     = useState("");
+  const [newCatColor, setNewCatColor]   = useState("#b8693d");
 
-  const allCats = [
-    { id: "alim", label: "Alimentation", color: "#b8693d" },
-    { id: "loy",  label: "Logement",     color: "#3d2817" },
-    { id: "tra",  label: "Transports",   color: "#6b7a4f" },
-    { id: "loi",  label: "Loisirs",      color: "#a85a48" },
-    { id: "san",  label: "Santé",        color: "#9d8b73" },
-    { id: "abo",  label: "Abonnements",  color: "#cd8459" },
-    { id: "inc",  label: "Revenus",      color: "#6b7a4f" },
-    { id: "epa",  label: "Épargne",      color: "#9d8b73" },
-  ];
+  const createAndAssignCat = rowIdx => {
+    if (!newCatName.trim()) return;
+    const id = "usr_" + Date.now();
+    setCategories(prev => [...prev, { id, label: newCatName.trim(), color: newCatColor, budget: 0, iconIdx: 0 }]);
+    setCatOverrides(prev => ({ ...prev, [rowIdx]: id }));
+    setCatPickerRow(null); setNewCatForRow(null); setNewCatName("");
+  };
 
   // Données réelles si disponibles, sinon mock de démonstration
   const review = txs || [
@@ -810,7 +811,7 @@ function ImportPreview({ onConfirm, onCancel, txs, fileName, fileSize }) {
   const totalDebit  = withCat.filter(t => t.amt < 0).reduce((s, t) => s + t.amt, 0);
   const totalCredit = withCat.filter(t => t.amt > 0).reduce((s, t) => s + t.amt, 0);
 
-  const catById = Object.fromEntries(allCats.map(c => [c.id, c]));
+  const catById = Object.fromEntries(categories.map(c => [c.id, c]));
 
   const displayName = fileName || "releve-bnp-avril-2026.pdf";
   const displaySize = fileSize ? fmtSize(fileSize) : "318 ko";
@@ -1051,18 +1052,51 @@ function ImportPreview({ onConfirm, onCancel, txs, fileName, fileSize }) {
                     )}
                     {catPickerRow === origIdx && (
                       <div className="ip-cat-picker" onClick={e => e.stopPropagation()}>
-                        {allCats.map(c => (
+                        {categories.map(c => (
                           <div key={c.id}
                                style={{ color: t.cat === c.id ? "var(--amber-500)" : "var(--ink-800)",
                                         background: t.cat === c.id ? "var(--amber-100)" : undefined }}
                                onClick={() => {
                                  setCatOverrides(prev => ({ ...prev, [origIdx]: c.id }));
-                                 setCatPickerRow(null);
+                                 setCatPickerRow(null); setNewCatForRow(null);
                                }}>
                             <span className="amb-dot" style={{ background: c.color }}/>
                             {c.label}
                           </div>
                         ))}
+                        <div style={{ borderTop: "1px solid var(--line)", paddingTop: 4, marginTop: 4 }}>
+                          {newCatForRow === origIdx ? (
+                            <div onClick={e => e.stopPropagation()} style={{ padding: "4px 8px" }}>
+                              <input autoFocus value={newCatName}
+                                     onChange={e => setNewCatName(e.target.value)}
+                                     onKeyDown={e => e.key === "Enter" && createAndAssignCat(origIdx)}
+                                     placeholder="Nom de la catégorie…"
+                                     style={{ width: "100%", boxSizing: "border-box", padding: "5px 8px",
+                                              border: "1px solid var(--amber-500)", borderRadius: 6,
+                                              fontSize: 12, background: "var(--cream-50)", outline: "none",
+                                              color: "var(--ink-800)", marginBottom: 6 }}/>
+                              <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
+                                {["#b8693d","#a85a48","#6b7a4f","#9d8b73","#cd8459","#3d2817","#7a5c3a"].map(c => (
+                                  <span key={c} onClick={() => setNewCatColor(c)} style={{
+                                    width: 14, height: 14, borderRadius: 3, background: c, cursor: "pointer",
+                                    border: c === newCatColor ? "2px solid var(--ink-800)" : "2px solid transparent",
+                                  }}/>
+                                ))}
+                              </div>
+                              <button onClick={() => createAndAssignCat(origIdx)} style={{
+                                width: "100%", padding: "5px 8px", borderRadius: 6, border: "none",
+                                background: "var(--amber-500)", color: "var(--cream-50)",
+                                fontSize: 11, cursor: "pointer", fontWeight: 500,
+                              }}>Créer</button>
+                            </div>
+                          ) : (
+                            <div onClick={() => { setNewCatForRow(origIdx); setNewCatName(""); }}
+                                 style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 10px",
+                                          cursor: "pointer", fontSize: 11.5, color: "var(--amber-500)" }}>
+                              <IcPlus size={10}/> Nouvelle catégorie…
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1083,7 +1117,7 @@ function ImportPreview({ onConfirm, onCancel, txs, fileName, fileSize }) {
             </div>
           </div>
           <div className="ip-recap">
-            {allCats.map(c => {
+            {categories.map(c => {
               const rows = withCat.filter(t => t.cat === c.id);
               if (rows.length === 0) return null;
               const sum = rows.reduce((s, t) => s + Math.abs(t.amt), 0);
@@ -1368,18 +1402,10 @@ function ImportSuccess({ onAgain, txs, fileName }) {
    Modal — configuration des règles automatiques
    ───────────────────────────────────────────────────────────────── */
 function RulesConfigModal({ txs, existingRules, onSave, onClose }) {
-  const allCats = [
-    { id: "alim", label: "Alimentation", color: "#b8693d" },
-    { id: "loy",  label: "Logement",     color: "#3d2817" },
-    { id: "tra",  label: "Transports",   color: "#6b7a4f" },
-    { id: "loi",  label: "Loisirs",      color: "#a85a48" },
-    { id: "san",  label: "Santé",        color: "#9d8b73" },
-    { id: "abo",  label: "Abonnements",  color: "#cd8459" },
-    { id: "inc",  label: "Revenus",      color: "#6b7a4f" },
-    { id: "epa",  label: "Épargne",      color: "#7a5c3a" },
-    { id: "aut",  label: "Autre",        color: "#888" },
-  ];
-  const catById = Object.fromEntries(allCats.map(c => [c.id, c]));
+  const [categories]                    = useCategories();
+  const [transactions, setTransactions] = useTransactions();
+  const [autoRulesStore, setAutoRulesStore] = useAutoRules();
+  const catById = Object.fromEntries(categories.map(c => [c.id, c]));
 
   const suggestions = useMemo(() => {
     const seen = new Map();
@@ -1399,8 +1425,11 @@ function RulesConfigModal({ txs, existingRules, onSave, onClose }) {
     suggestions.forEach((s, i) => { init[i] = s.cat != null && s.cat !== "aut"; });
     return init;
   });
-  const [catOverrides, setCatOverrides] = useState({});
-  const [catPickerIdx, setCatPickerIdx] = useState(null);
+  const [catOverrides, setCatOverrides]   = useState({});
+  const [catPickerIdx, setCatPickerIdx]   = useState(null);
+  const [customPattern, setCustomPattern] = useState("");
+  const [customCatId, setCustomCatId]     = useState(null);
+  const [customCatOpen, setCustomCatOpen] = useState(false);
 
   const selectedCount = Object.values(selected).filter(Boolean).length;
 
@@ -1415,10 +1444,25 @@ function RulesConfigModal({ txs, existingRules, onSave, onClose }) {
           pattern: s.pattern,
           catId: catOverrides[i] || s.cat || "aut",
           matchType: "contains",
+          active: true,
           createdAt: new Date().toISOString(),
         })),
     ];
+    setAutoRulesStore(newRules);
+    setTransactions(prev => reapplyRules(prev, newRules, true));
     onSave(newRules);
+  };
+
+  const addCustomRule = () => {
+    if (!customPattern.trim() || !customCatId) return;
+    const newRule = { id: Date.now(), pattern: customPattern.toLowerCase().trim(),
+      catId: customCatId, matchType: "contains", active: true, createdAt: new Date().toISOString() };
+    setAutoRulesStore([newRule, ...autoRulesStore]); // priorité max
+    setTransactions(prev => prev.map(t => {
+      const cat = applyRules([newRule], t.lbl);
+      return cat ? { ...t, cat } : t;
+    }));
+    setCustomPattern(""); setCustomCatId(null);
   };
 
   return (
@@ -1509,7 +1553,7 @@ function RulesConfigModal({ txs, existingRules, onSave, onClose }) {
                       borderRadius: 10, padding: 6, minWidth: 150,
                       boxShadow: "0 4px 14px rgba(0,0,0,0.12)",
                     }} onClick={e => e.stopPropagation()}>
-                      {allCats.filter(c => c.id !== "inc").map(c => (
+                      {categories.filter(c => c.id !== "inc").map(c => (
                         <div key={c.id} onClick={() => { setCatOverrides(p => ({ ...p, [i]: c.id })); setCatPickerIdx(null); }}
                              style={{
                                display: "flex", alignItems: "center", gap: 8,
@@ -1527,6 +1571,64 @@ function RulesConfigModal({ txs, existingRules, onSave, onClose }) {
               </div>
             );
           })}
+        </div>
+
+        {/* Règle personnalisée */}
+        <div style={{ padding: "10px 24px", borderTop: "1px solid var(--line)",
+                      background: "var(--cream-100)" }}
+             onClick={() => setCustomCatOpen(false)}>
+          <div style={{ fontSize: 11, color: "var(--ink-500)", marginBottom: 6, fontWeight: 500 }}>
+            Ajouter une règle manuellement
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input value={customPattern} onChange={e => setCustomPattern(e.target.value)}
+                   onKeyDown={e => e.key === "Enter" && addCustomRule()}
+                   placeholder='ex. "intermarché", "prime video"…'
+                   style={{ flex: 1, padding: "6px 10px", borderRadius: 7, fontSize: 12,
+                            border: "1px solid var(--line)", background: "var(--cream-50)",
+                            color: "var(--ink-800)", outline: "none" }}/>
+            <div style={{ position: "relative" }} onClick={e => e.stopPropagation()}>
+              <button onClick={() => setCustomCatOpen(o => !o)} style={{
+                padding: "6px 10px", borderRadius: 7, border: "1px solid var(--line)",
+                background: "var(--cream-50)", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap",
+                color: customCatId ? (catById[customCatId]?.color || "var(--ink-700)") : "var(--ink-500)",
+                display: "flex", alignItems: "center", gap: 4, minWidth: 110,
+              }}>
+                {customCatId ? catById[customCatId]?.label : "Catégorie…"}
+                <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M2 4l4 4 4-4"/>
+                </svg>
+              </button>
+              {customCatOpen && (
+                <div style={{
+                  position: "absolute", right: 0, bottom: "calc(100% + 4px)", zIndex: 20,
+                  background: "var(--cream-50)", border: "1px solid var(--amber-500)",
+                  borderRadius: 10, padding: 6, minWidth: 150,
+                  boxShadow: "0 4px 14px rgba(0,0,0,0.12)", maxHeight: 200, overflow: "auto",
+                }}>
+                  {categories.filter(c => c.id !== "inc").map(c => (
+                    <div key={c.id} onClick={() => { setCustomCatId(c.id); setCustomCatOpen(false); }}
+                         style={{ display: "flex", alignItems: "center", gap: 8,
+                                  padding: "7px 10px", borderRadius: 7, cursor: "pointer", fontSize: 12,
+                                  background: customCatId === c.id ? "var(--amber-100)" : undefined,
+                                  color: customCatId === c.id ? "var(--amber-500)" : "var(--ink-800)" }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: c.color, flexShrink: 0 }}/>
+                      {c.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button onClick={addCustomRule} disabled={!customPattern.trim() || !customCatId} style={{
+              padding: "6px 12px", borderRadius: 7, border: "none", fontSize: 12, fontWeight: 500,
+              cursor: customPattern.trim() && customCatId ? "pointer" : "not-allowed",
+              background: customPattern.trim() && customCatId ? "var(--amber-500)" : "var(--cream-200)",
+              color: customPattern.trim() && customCatId ? "var(--cream-50)" : "var(--ink-500)",
+              display: "flex", alignItems: "center", gap: 4,
+            }}>
+              <IcPlus size={11}/>Ajouter
+            </button>
+          </div>
         </div>
 
         {/* Footer */}

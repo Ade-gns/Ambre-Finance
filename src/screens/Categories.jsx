@@ -5,7 +5,7 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useTransactions, useCategories, useAutoRules, applyRules, computeCatTotals, DEFAULT_CATS } from "../lib/store";
+import { useTransactions, useCategories, useAutoRules, applyRules, reapplyRules, computeCatTotals, DEFAULT_CATS } from "../lib/store";
 import { fmtEUR, pathSmooth } from "../lib/chartPrimitives";
 import {
   IcSearch, IcCalendar, IcFilter, IcArrowR, IcChevDn,
@@ -97,7 +97,7 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
 
   // Rules — connectées au store partagé avec l'import
   const [autoRules, setAutoRules] = useAutoRules();
-  const [transactions] = useTransactions();
+  const [transactions, setTransactions] = useTransactions();
   const [editRuleId, setEditRuleId]     = useState(null);
   const [editDraft, setEditDraft]       = useState({});
   const [ruleFormOpen, setRuleFormOpen] = useState(false);
@@ -129,22 +129,30 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
     last:   ruleStats[rule.id]?.last || "—",
   });
 
-  const toggleRule    = id => setAutoRules(prev => prev.map(r => r.id === id ? { ...r, active: !(r.active !== false) } : r));
+  const toggleRule = id => {
+    const updated = autoRules.map(r => r.id === id ? { ...r, active: !(r.active !== false) } : r);
+    setAutoRules(updated);
+    setTransactions(prev => reapplyRules(prev, updated, true));
+  };
   const deleteRule    = id => setAutoRules(prev => prev.filter(r => r.id !== id));
   const startEditRule = r  => { setEditRuleId(r.id); setEditDraft({ when: r.when, op: r.op }); };
   const saveEditRule  = () => {
-    setAutoRules(prev => prev.map(r => r.id === editRuleId
+    const updated = autoRules.map(r => r.id === editRuleId
       ? { ...r, pattern: editDraft.op, matchType: matchTypeFromWhen(editDraft.when) }
-      : r));
+      : r);
+    setAutoRules(updated);
+    setTransactions(prev => reapplyRules(prev, updated, true));
     setEditRuleId(null);
   };
   const createRule = () => {
     if (!newOp.trim()) return;
-    setAutoRules(prev => [...prev, {
-      id: Date.now(), pattern: newOp.trim(), catId: selected?.id ?? "alim",
-      matchType: matchTypeFromWhen(newWhen), active: true,
-      createdAt: new Date().toISOString(),
-    }]);
+    const newRule = { id: Date.now(), pattern: newOp.trim(), catId: selected?.id ?? "alim",
+      matchType: matchTypeFromWhen(newWhen), active: true, createdAt: new Date().toISOString() };
+    setAutoRules([newRule, ...autoRules]); // priorité max
+    setTransactions(prev => prev.map(t => {
+      const cat = applyRules([newRule], t.lbl);
+      return cat ? { ...t, cat } : t;
+    }));
     setNewOp(""); setNewWhen("libellé contient"); setRuleFormOpen(false);
   };
 
@@ -383,7 +391,14 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
                             style={{ background: c }}
                             onClick={() => updateCatProp(selected.id, 'color', c)}/>
                     ))}
-                    <span className="cm-color-custom"><IcPlus size={14}/></span>
+                    <label className="cm-color-custom" title="Couleur personnalisée"
+                           style={{ background: (catEdits[selected.id]?.color || selected.color), position: "relative", overflow: "hidden" }}>
+                      <IcPlus size={14}/>
+                      <input type="color"
+                             value={catEdits[selected.id]?.color || selected.color}
+                             onChange={e => updateCatProp(selected.id, 'color', e.target.value)}
+                             style={{ position: "absolute", opacity: 0, inset: 0, cursor: "pointer" }}/>
+                    </label>
                   </div>
                 </div>
                 <div className="cm-row">
@@ -559,15 +574,28 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
               <div>
                 <label style={{ fontSize: 11, color: "var(--ink-600)", textTransform: "uppercase",
                                 letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>Couleur</label>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {["#b8693d","#cd8459","#a85a48","#3d2817","#6b7a4f","#7a5c3a","#9d8b73","#d4a76a"].map(c => (
-                    <span key={c}
-                          onClick={() => setNewColor(c)}
-                          style={{
-                            width: 30, height: 30, borderRadius: 8, background: c, cursor: "pointer",
-                            border: c === newColor ? "2.5px solid var(--ink-900)" : "2px solid transparent",
-                          }}/>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  {["#b8693d","#cd8459","#a85a48","#3d2817","#6b7a4f","#7a5c3a","#9d8b73","#d4a76a",
+                    "#4a7fa5","#7b5ea7","#c0793a","#2d7d52"].map(c => (
+                    <span key={c} onClick={() => setNewColor(c)} style={{
+                      width: 30, height: 30, borderRadius: 8, background: c, cursor: "pointer",
+                      border: c === newColor ? "2.5px solid var(--ink-900)" : "2px solid transparent",
+                    }}/>
                   ))}
+                  <label title="Couleur personnalisée" style={{
+                    width: 30, height: 30, borderRadius: 8, cursor: "pointer",
+                    background: newColor, border: "2px dashed var(--line-strong)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    overflow: "hidden", position: "relative",
+                  }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white"
+                         strokeWidth="2" strokeLinecap="round" style={{ pointerEvents: "none" }}>
+                      <circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/>
+                    </svg>
+                    <input type="color" value={newColor} onChange={e => setNewColor(e.target.value)}
+                           style={{ position: "absolute", opacity: 0, width: "100%", height: "100%",
+                                    cursor: "pointer", top: 0, left: 0 }}/>
+                  </label>
                 </div>
               </div>
             </div>

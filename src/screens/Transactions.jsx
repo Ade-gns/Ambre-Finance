@@ -6,7 +6,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useTransactions, useCategories, parseTxDate, txMonthKey, txMonths, monthKeyLabel } from "../lib/store";
+import { useTransactions, useCategories, useAutoRules, applyRules, reapplyRules, parseTxDate, txMonthKey, txMonths, monthKeyLabel } from "../lib/store";
 import { fmtEUR } from "../lib/chartPrimitives";
 import {
   IcSearch, IcCalendar, IcFilter, IcArrowDn, IcChevDn,
@@ -507,13 +507,51 @@ function TxDetailList({ tSel, catDefs }) {
    ───────────────────────────────────────────────────────────────── */
 function TxDetail({ t: tSel, onClose }) {
   const [catDefs] = useCategories();
-  const [, setAllTxs] = useTransactions();
+  const [allTxs, setAllTxs] = useTransactions();
+  const [autoRules, setAutoRules] = useAutoRules();
   const [catId, setCatId]             = useState(tSel.cat);
   const [catPickerOpen, setCatPickerOpen] = useState(false);
   const [deleteState, setDeleteState] = useState(false);
+  const [ruleCreated, setRuleCreated] = useState(false);
   const catSel = txCatStyle(catId, catDefs);
-
   const allCats = catDefs;
+
+  const norm = s => (s || "").toLowerCase().normalize("NFD")
+    .replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
+
+  // Mots génériques bancaires à ignorer pour trouver le nom du marchand
+  const SKIP = new Set([
+    "prlv","prelevement","virement","sepa","carte","retrait","dab","achat",
+    "paiement","pmt","chq","cheque","avoir","frais","comm","facture","fact",
+    "remboursement","remb","vir","virt","str","tpe","int","prel","men",
+    "mensuel","mensuelle","debit","credit","vente","achat","ref","bon",
+  ]);
+
+  const simLbl = (() => {
+    const words = norm(tSel.lbl).split(" ").filter(w => w.length > 2 && !SKIP.has(w));
+    return words.find(w => w.length > 3) || words[0] || "";
+  })();
+
+  const similarTxs = allTxs
+    .filter(t => {
+      if (String(t.id) === String(tSel.id)) return false;
+      return simLbl && norm(t.lbl).includes(simLbl);
+    })
+    .sort((a, b) => { const da = parseTxDate(a.d), db = parseTxDate(b.d); return (db?.getTime() || 0) - (da?.getTime() || 0); })
+    .slice(0, 4);
+
+  const handleCreateRule = () => {
+    if (!simLbl || ruleCreated) return;
+    const newRule = { id: Date.now(), pattern: simLbl, catId, matchType: "contains", active: true, createdAt: new Date().toISOString() };
+    // Nouvelle règle EN PREMIER → priorité max sur les anciennes
+    setAutoRules([newRule, ...autoRules]);
+    // Applique UNIQUEMENT cette règle (évite qu'une ancienne règle conflictuelle écrase)
+    setAllTxs(prev => prev.map(t => {
+      const cat = applyRules([newRule], t.lbl);
+      return cat ? { ...t, cat } : t;
+    }));
+    setRuleCreated(true);
+  };
 
   return (
     <div style={{
@@ -602,25 +640,22 @@ function TxDetail({ t: tSel, onClose }) {
           </div>
         </div>
 
+        {similarTxs.length > 0 && (
         <div className="tx-detail-section">
           <div className="tx-detail-section-t">
-            Transactions similaires <span style={{ color: "var(--amber-500)" }}>· 5</span>
+            Transactions similaires <span style={{ color: "var(--amber-500)" }}>· {similarTxs.length}</span>
           </div>
           <div className="tx-similar">
-            {[
-              { d: "07/05", amt: -39.85, lbl: "Monoprix" },
-              { d: "05/05", amt: -82.40, lbl: "Auchan Drive" },
-              { d: "27/04", amt: -82.40, lbl: "Auchan Drive" },
-              { d: "23/04", amt: -42.10, lbl: "Monoprix Rue Dampierre" },
-            ].map((s, i) => (
+            {similarTxs.map((s, i) => (
               <div key={i} className="tx-similar-row">
-                <span className="date">{s.d}</span>
+                <span className="date">{s.d?.slice(0, 5) || s.d}</span>
                 <span style={{ color: "var(--ink-800)" }}>{s.lbl}</span>
                 <span className="amt">{fmtEUR(s.amt, 2)}</span>
               </div>
             ))}
           </div>
         </div>
+        )}
 
         <div className="tx-rule">
           <div style={{ width: 24, height: 24, borderRadius: 6, background: "var(--cream-50)",
@@ -632,11 +667,22 @@ function TxDetail({ t: tSel, onClose }) {
             </svg>
           </div>
           <div style={{ flex: 1 }}>
-            <div className="tx-rule-t">Toujours classer « Carrefour » en Alimentation ?</div>
-            <div className="tx-rule-s">5 transactions similaires existent déjà.</div>
-            <button className="tx-btn amber tx-rule-cta" style={{ padding: "5px 10px", fontSize: 11 }}>
-              Créer la règle
-            </button>
+            <div className="tx-rule-t">
+              {ruleCreated
+                ? `Règle « ${simLbl} » créée ✓`
+                : `Classer « ${simLbl || tSel.lbl.slice(0, 20)} » en ${catSel.label} ?`}
+            </div>
+            <div className="tx-rule-s">
+              {similarTxs.length > 0
+                ? `${similarTxs.length} transaction${similarTxs.length > 1 ? "s" : ""} similaire${similarTxs.length > 1 ? "s" : ""} détectée${similarTxs.length > 1 ? "s" : ""}.`
+                : "Aucune transaction similaire pour l'instant."}
+            </div>
+            {!ruleCreated && simLbl && (
+              <button className="tx-btn amber tx-rule-cta" style={{ padding: "5px 10px", fontSize: 11 }}
+                      onClick={handleCreateRule}>
+                Créer la règle
+              </button>
+            )}
           </div>
         </div>
 
@@ -657,7 +703,15 @@ function TxDetail({ t: tSel, onClose }) {
           </button>
           <span style={{ flex: 1 }}/>
           <button className="tx-danger-btn"
-                  onClick={() => { if (deleteState) { onClose(); } else { setDeleteState(true); setTimeout(() => setDeleteState(false), 3000); } }}
+                  onClick={() => {
+                    if (deleteState) {
+                      setAllTxs(prev => prev.filter(t => String(t.id) !== String(tSel.id)));
+                      onClose();
+                    } else {
+                      setDeleteState(true);
+                      setTimeout(() => setDeleteState(false), 3000);
+                    }
+                  }}
                   style={{ borderColor: deleteState ? "var(--rose-500)" : undefined,
                            background: deleteState ? "rgba(168,90,72,0.08)" : undefined }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
