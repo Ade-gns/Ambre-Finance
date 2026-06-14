@@ -1186,7 +1186,7 @@ const TX_STYLES = `
     .tx-chips { gap: 6px; }
     /* Table : masquer compte, catégorie, mode — garder checkbox/date/libellé/montant/menu */
     .tx-thead, .tx-row {
-      grid-template-columns: 24px 62px 1fr 80px 24px;
+      grid-template-columns: 24px 82px 1fr 80px 24px;
       padding: 8px 10px;
       gap: 8px;
     }
