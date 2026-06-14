@@ -143,3 +143,32 @@ button {
   display: inline-block;
   flex-shrink: 0;
 }
+
+/* ─── Layout principal ───────────────────────────────────────────── */
+.main-layout {
+  width: 100%;
+  height: 100vh;
+  background: var(--page-bg);
+  color: var(--ink-800);
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  font-size: 13px;
+  overflow: hidden;
+}
+.main-content {
+  overflow: auto;
+  height: 100vh;
+}
+
+/* ─── Responsive mobile (≤768 px) ───────────────────────────────── */
+@media (max-width: 768px) {
+  .main-layout {
+    grid-template-columns: 1fr;
+  }
+  /* Sidebar latérale masquée sur mobile — remplacée par la barre du bas */
+  .atc-side { display: none !important; }
+  .main-content {
+    /* Laisse 60 px pour la bottom-nav fixe */
+    height: calc(100vh - 60px);
+  }
+}

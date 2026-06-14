@@ -281,6 +281,33 @@ export default function Dashboard() {
         .atc-pick-btn.active {
           background: var(--amber-100); color: var(--amber-500); font-weight: 500;
         }
+
+        /* ── Mobile ── */
+        @media (max-width: 768px) {
+          .atc-main { padding: 14px 14px 14px; gap: 10px; }
+          .atc-top { flex-direction: column; align-items: flex-start; gap: 8px; }
+          .atc-tool { flex-wrap: wrap; gap: 6px; }
+          .atc-btn { padding: 6px 10px; font-size: 11px; }
+          /* Hero : grand card pleine largeur, 2 mini-cards par ligne */
+          .atc-hero { grid-template-columns: 1fr 1fr; }
+          .atc-hero > :first-child { grid-column: 1 / -1; min-height: 130px; }
+          .atc-hero-v { font-size: 38px; }
+          .atc-hero-v .cur { font-size: 22px; }
+          .atc-hero-v .cents { font-size: 18px; }
+          /* Body : colonne unique */
+          .atc-body { grid-template-columns: 1fr; min-height: 0; }
+          /* Catégories : 2 colonnes */
+          .atc-cats { grid-template-columns: 1fr 1fr; }
+          /* Timeline : réduire la gouttière de date */
+          .atc-tl-day { grid-template-columns: 44px 1fr; gap: 8px; }
+          .atc-tl-date .num { font-size: 15px; }
+          .atc-tl-row { grid-template-columns: 14px 1fr 80px; gap: 6px; }
+        }
+        @media (max-width: 480px) {
+          .atc-hero { grid-template-columns: 1fr; }
+          .atc-hero > :first-child { grid-column: auto; }
+          .atc-cats { grid-template-columns: 1fr; }
+        }
       `}</style>
 
       <div className="atc-top">

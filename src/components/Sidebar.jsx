@@ -1,4 +1,5 @@
 // Sidebar — barre latérale partagée par tous les écrans.
+// BottomNav — navigation fixe en bas pour mobile.
 // Utilise React Router pour la navigation.
 
 import { useState, useEffect } from "react";
@@ -7,6 +8,14 @@ import { load, save } from "../lib/storage";
 import {
   IcHome, IcImport, IcList, IcTag, IcChart, IcBell, IcSettings, IcSun, IcMoon, IcLock
 } from "../lib/icons";
+
+const MOBILE_NAV = [
+  { to: "/",             icon: IcHome,     label: "Accueil" },
+  { to: "/transactions", icon: IcList,     label: "Opérations" },
+  { to: "/import",       icon: IcImport,   label: "Importer" },
+  { to: "/alerts",       icon: IcBell,     label: "Alertes" },
+  { to: "/categories",   icon: IcTag,      label: "Catégories" },
+];
 
 const BASE_NAV = [
   { to: "/",             icon: IcHome,     label: "Tableau" },
@@ -131,5 +140,78 @@ export default function Sidebar() {
         <button className="atc-nav-btn" title="Verrouiller"><IcLock size={16}/></button>
       </div>
     </aside>
+  );
+}
+
+/* Navigation fixe en bas — visible uniquement sur mobile (≤768 px) */
+export function BottomNav() {
+  const [unread, setUnread] = useState(() => {
+    const a = load("alerts", []);
+    return a.filter(x => x.state === "unread").length;
+  });
+
+  useEffect(() => {
+    const handler = e => {
+      if (e.detail?.key === "alerts")
+        setUnread((e.detail.value || []).filter(x => x.state === "unread").length);
+    };
+    window.addEventListener("ambre:storage", handler);
+    return () => window.removeEventListener("ambre:storage", handler);
+  }, []);
+
+  return (
+    <nav className="atc-bnav">
+      <style>{`
+        .atc-bnav {
+          display: none;
+          position: fixed;
+          bottom: 0; left: 0; right: 0;
+          height: 60px;
+          background: var(--cream-50);
+          border-top: 1px solid var(--line);
+          z-index: 200;
+          padding-bottom: env(safe-area-inset-bottom, 0px);
+        }
+        .atc-bnav-item {
+          flex: 1;
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: center;
+          gap: 3px;
+          font-size: 10px;
+          color: var(--ink-500);
+          text-decoration: none;
+          position: relative;
+          transition: color 0.15s;
+        }
+        .atc-bnav-item.active { color: var(--amber-500); }
+        .atc-bnav-item .bdg {
+          position: absolute;
+          top: 8px; right: calc(50% - 14px);
+          width: 6px; height: 6px;
+          border-radius: 999px;
+          background: var(--rose-500);
+        }
+        @media (max-width: 768px) {
+          .atc-bnav { display: flex; }
+        }
+      `}</style>
+
+      {MOBILE_NAV.map(it => {
+        const Ico = it.icon;
+        const badge = it.to === "/alerts" && unread > 0;
+        return (
+          <NavLink
+            key={it.to}
+            to={it.to}
+            end={it.to === "/"}
+            className={({ isActive }) => "atc-bnav-item" + (isActive ? " active" : "")}
+          >
+            <Ico size={20}/>
+            <span>{it.label}</span>
+            {badge && <span className="bdg"/>}
+          </NavLink>
+        );
+      })}
+    </nav>
   );
 }

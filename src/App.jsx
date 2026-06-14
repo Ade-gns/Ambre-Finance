@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { load, useLocalStorage } from "./lib/storage";
 import { useTransactions, useCategories, useAlertDefs, computeAlertNotifs, mergeAlertNotifs } from "./lib/store";
-import Sidebar from "./components/Sidebar";
+import Sidebar, { BottomNav } from "./components/Sidebar";
 import Dashboard from "./screens/Dashboard";
 import Import from "./screens/Import";
 import Transactions from "./screens/Transactions";
@@ -62,21 +62,15 @@ function ThemeWatcher() {
 /* Layout standard : sidebar à gauche + contenu à droite */
 function MainLayout({ children }) {
   return (
-    <div style={{
-      width: "100%",
-      height: "100vh",
-      background: "var(--page-bg)",
-      color: "var(--ink-800)",
-      display: "grid",
-      gridTemplateColumns: "72px 1fr",
-      fontSize: 13,
-      overflow: "hidden",
-    }}>
-      <Sidebar />
-      <div style={{ overflow: "auto", height: "100vh" }}>
-        {children}
+    <>
+      <div className="main-layout">
+        <Sidebar />
+        <div className="main-content">
+          {children}
+        </div>
       </div>
-    </div>
+      <BottomNav />
+    </>
   );
 }
 

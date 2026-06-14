@@ -555,12 +555,7 @@ function TxDetail({ t: tSel, onClose }) {
   };
 
   return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: "1fr 360px",
-      height: "100%",
-      background: "var(--page-bg)",
-    }}>
+    <div className="tx-panel-layout">
       <TxDetailList tSel={tSel} catDefs={catDefs}/>
 
       <aside className="tx-detail">
@@ -1169,4 +1164,57 @@ const TX_STYLES = `
   .tx-empty-chip.amber { background: var(--amber-100); color: var(--amber-500);
                          border-color: rgba(184,105,61,0.3); }
   .tx-empty-actions { display: flex; gap: 10px; margin-top: 14px; }
+
+  /* ─── Layout panel detail ─── */
+  .tx-panel-layout {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    height: 100%;
+    background: var(--page-bg);
+  }
+
+  /* ─── Mobile ─── */
+  @media (max-width: 768px) {
+    .tx-main { padding: 14px 12px; gap: 10px; }
+    .tx-top { flex-direction: column; align-items: flex-start; gap: 6px; }
+    .tx-h1 { font-size: 22px; }
+    .tx-h1-actions { flex-wrap: wrap; gap: 6px; }
+    .tx-toolbar { flex-wrap: wrap; gap: 6px; }
+    .tx-search { min-width: 0; flex: 1 1 100%; }
+    .tx-segmented { overflow-x: auto; max-width: 100%; }
+    .tx-summary { flex-wrap: wrap; gap: 8px; padding: 8px 12px; font-size: 11px; }
+    .tx-chips { gap: 6px; }
+    /* Table : masquer compte, catégorie, mode — garder checkbox/date/libellé/montant/menu */
+    .tx-thead, .tx-row {
+      grid-template-columns: 24px 62px 1fr 80px 24px;
+      padding: 8px 10px;
+      gap: 8px;
+    }
+    .tx-acc, .tx-cat-chip, .tx-mode { display: none !important; }
+    .tx-thead > :nth-child(4),
+    .tx-thead > :nth-child(5),
+    .tx-thead > :nth-child(6) { display: none !important; }
+    .tx-pagination { flex-wrap: wrap; gap: 8px; padding: 8px 12px; font-size: 11px; }
+    /* Panel détail : overlay plein écran */
+    .tx-panel-layout { grid-template-columns: 1fr; }
+    .tx-detail {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 60px;
+      z-index: 150;
+      border-left: none;
+      border-top: 1px solid var(--line);
+      overflow-y: auto;
+    }
+    .tx-detail-close {
+      position: sticky; top: 0;
+      align-self: auto;
+      z-index: 1;
+      background: var(--cream-50);
+    }
+    .tx-detail-amt { font-size: 36px; }
+    .tx-detail-lbl { font-size: 18px; }
+    /* Bulk bar */
+    .tx-bulk-bar { flex-wrap: wrap; border-radius: 8px; gap: 8px; }
+    .tx-bulk-count { font-size: 18px; }
+  }
 `;
