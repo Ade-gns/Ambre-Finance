@@ -490,6 +490,14 @@ function ImportEmpty({ onFile, importHistory = [] }) {
                       font-size: 11px; font-weight: 500; }
         .ie-hist-act { display: flex; gap: 6px; }
         .ie-hist-act > button { width: 26px; height: 26px; padding: 0; }
+
+        @media (max-width: 768px) {
+          .ie-main { padding: 14px 12px; }
+          .ie-top { flex-direction: column; align-items: flex-start; gap: 8px; }
+          .ie-tool { flex-wrap: wrap; }
+          .ie-cols { grid-template-columns: 1fr; flex: none; min-height: 0; }
+          .ie-card { min-height: 200px; }
+        }
       `}</style>
 
       {/* Input fichier caché — déclenché par le bouton */}
@@ -649,7 +657,7 @@ function ImportEmpty({ onFile, importHistory = [] }) {
           background: "var(--overlay-scrim)", backdropFilter: "blur(4px)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }} onClick={() => setAddSourceOpen(false)}>
-          <div style={{
+          <div className="ambre-modal-box" style={{
             background: "var(--cream-50)", borderRadius: 16,
             padding: "28px 32px", width: 420,
             boxShadow: "0 24px 60px var(--shadow-modal)",
@@ -708,7 +716,7 @@ function ImportEmpty({ onFile, importHistory = [] }) {
           background: "var(--overlay-scrim)", backdropFilter: "blur(4px)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }} onClick={() => setHistOpen(false)}>
-          <div style={{
+          <div className="ambre-modal-box" style={{
             background: "var(--cream-50)", borderRadius: 16,
             padding: "28px 32px", width: 560,
             boxShadow: "0 24px 60px var(--shadow-modal)",
@@ -942,6 +950,17 @@ function ImportPreview({ onConfirm, onCancel, txs, fileName, fileSize }) {
         .ip-rule-t { font-size: 12px; color: var(--ink-900); font-weight: 500; }
         .ip-rule-s { font-size: 11px; color: var(--ink-700); margin-top: 3px; line-height: 1.4; }
         .ip-rule-actions { display: flex; gap: 6px; margin-top: 8px; }
+
+        @media (max-width: 768px) {
+          .ip-main { padding: 14px 12px; overflow: auto; }
+          .ip-top { flex-direction: column; align-items: flex-start; gap: 8px; }
+          .ip-tool { flex-wrap: wrap; }
+          .ip-stats { grid-template-columns: 1fr 1fr; }
+          .ip-cols { grid-template-columns: 1fr; flex: none; min-height: 0; }
+          /* Table de révision : scroll horizontal */
+          .ip-tbody { overflow-x: auto; }
+          .ip-tr { min-width: 480px; }
+        }
       `}</style>
 
       <div className="ip-top">
@@ -1290,6 +1309,15 @@ function ImportSuccess({ onAgain, txs, fileName }) {
                        padding: 10px 14px; background: var(--cream-100);
                        border-radius: 8px;
                        font-size: 11.5px; color: var(--sage-500); margin-top: auto; }
+
+        @media (max-width: 768px) {
+          .su-main { padding: 14px 12px; }
+          .su-hero { grid-template-columns: 1fr; padding: 28px 20px; gap: 16px; }
+          .su-hero-h { font-size: 32px; }
+          .su-stats { grid-template-columns: 1fr 1fr; }
+          .su-bot { grid-template-columns: 1fr; }
+          .su-hero-actions { min-width: 0; }
+        }
       `}</style>
 
       <div className="su-bread">
@@ -1726,6 +1754,12 @@ function ImportError({ onRetry, errorMsg, fileName }) {
                       background: rgba(168,90,72,0.08); border-left: 3px solid var(--rose-500);
                       padding: 12px 16px; border-radius: 0 8px 8px 0; margin-top: 12px;
                       line-height: 1.5; }
+
+        @media (max-width: 768px) {
+          .ier-main { padding: 14px 12px; }
+          .ier-hero { grid-template-columns: 1fr; padding: 24px 20px; gap: 14px; }
+          .ier-h { font-size: 26px; }
+        }
       `}</style>
 
       <div className="ier-bread">

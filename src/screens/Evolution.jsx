@@ -385,4 +385,20 @@ const EV_STYLES = `
   .ev-tile-pct.down { color: var(--sage-500); }
   .ev-tile-v { font-family: var(--font-display); font-size: 19px;
                color: var(--ink-900); line-height: 1; }
+
+  @media (max-width: 768px) {
+    .ev-main { padding: 14px 12px; gap: 10px; }
+    .ev-top { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .ev-tool { flex-wrap: wrap; }
+    .ev-hero-head { flex-direction: column; gap: 8px; }
+    .ev-legend { flex-wrap: wrap; }
+    .ev-bot { grid-template-columns: 1fr; }
+    .ev-grid { grid-template-columns: 1fr 1fr; }
+    .ev-cmp-row { grid-template-columns: 1fr 75px 70px 60px; gap: 6px; }
+  }
+  @media (max-width: 480px) {
+    .ev-grid { grid-template-columns: 1fr; }
+    .ev-cmp-row { grid-template-columns: 1fr 75px 60px; }
+    .ev-cmp-row > :nth-child(3) { display: none; }
+  }
 `;

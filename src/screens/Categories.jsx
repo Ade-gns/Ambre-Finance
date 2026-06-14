@@ -542,7 +542,7 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
           background: "var(--overlay-scrim)", backdropFilter: "blur(4px)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }} onClick={() => setNewOpen(false)}>
-          <div style={{
+          <div className="ambre-modal-box" style={{
             background: "var(--cream-50)", borderRadius: 16,
             padding: "28px 32px", width: 400,
             boxShadow: "0 24px 60px var(--shadow-modal)",
@@ -620,7 +620,7 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
           background: "var(--overlay-scrim)", backdropFilter: "blur(4px)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }} onClick={() => setRuleFormOpen(false)}>
-          <div style={{
+          <div className="ambre-modal-box" style={{
             background: "var(--cream-50)", borderRadius: 16,
             padding: "28px 32px", width: 440,
             boxShadow: "0 24px 60px var(--shadow-modal)",
@@ -1419,4 +1419,21 @@ const CAT_STYLES = `
                      flex-shrink: 0; }
   .ce-rule-tip-t { font-size: 12.5px; color: var(--ink-900); font-weight: 500; }
   .ce-rule-tip-s { font-size: 11.5px; color: var(--ink-600); margin-top: 3px; line-height: 1.5; }
+
+  @media (max-width: 768px) {
+    /* Manage view */
+    .cm-main { padding: 14px 12px; height: auto; overflow: auto; }
+    .cm-top { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .cm-tool { flex-wrap: wrap; }
+    .cm-body { grid-template-columns: 1fr; }
+    .cm-card { max-height: 280px; }
+    .cm-row { grid-template-columns: 90px 1fr; gap: 10px; }
+    /* Detail view */
+    .cd-main { padding: 14px 12px; }
+    .cd-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .cd-kpis { grid-template-columns: 1fr 1fr; }
+    .cd-bot { grid-template-columns: 1fr; }
+    /* Empty view */
+    .ce-main { padding: 14px 12px; }
+  }
 `;

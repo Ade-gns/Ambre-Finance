@@ -459,4 +459,18 @@ const AH_STYLES = `
                 transition: background 0.15s, color 0.15s; }
   .ah-iconbtn:hover:not(:disabled) { background: var(--cream-200); color: var(--ink-800); }
   .ah-iconbtn:disabled { cursor: not-allowed; }
+
+  @media (max-width: 768px) {
+    .ah-main { padding: 14px 12px; height: auto; overflow: visible; }
+    .ah-top { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .ah-stats { grid-template-columns: 1fr 1fr; }
+    .ah-toolbar { flex-wrap: wrap; }
+    .ah-row {
+      grid-template-columns: 40px 1fr 28px 28px;
+      gap: 8px; padding: 12px 14px;
+    }
+    .ah-time { display: none; }
+    .ah-cta { font-size: 10px; padding: 4px 6px; }
+    .ah-timeline { overflow: visible; }
+  }
 `;

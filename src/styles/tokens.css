@@ -160,6 +160,12 @@ button {
   height: 100vh;
 }
 
+/* ─── Modales — largeur adaptative ──────────────────────────────── */
+/* max-width contraint width même avec un style inline (CSS spec) */
+.ambre-modal-box {
+  max-width: 92vw;
+}
+
 /* ─── Responsive mobile (≤768 px) ───────────────────────────────── */
 @media (max-width: 768px) {
   .main-layout {
@@ -170,5 +176,8 @@ button {
   .main-content {
     /* Laisse 60 px pour la bottom-nav fixe */
     height: calc(100vh - 60px);
+  }
+  .ambre-modal-box {
+    padding: 20px 18px !important;
   }
 }

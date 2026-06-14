@@ -453,7 +453,7 @@ function SettingsAccounts() {
           background: "var(--overlay-scrim)", backdropFilter: "blur(4px)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }} onClick={() => setShowAddAccount(false)}>
-          <div style={{
+          <div className="ambre-modal-box" style={{
             background: "var(--cream-50)", borderRadius: 16,
             padding: "28px 32px", width: 440,
             boxShadow: "0 24px 60px var(--shadow-modal)",
@@ -931,7 +931,7 @@ function SettingsBackup() {
             Vous pouvez le déplacer, le sauvegarder, l'ouvrir avec un autre outil.
           </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+        <div className="stg-grid-3">
           <div style={{ padding: "12px 14px", background: "var(--cream-100)",
                         borderRadius: 10, border: "1px solid var(--line)" }}>
             <div style={{ fontSize: 10, color: "var(--ink-500)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
@@ -1156,7 +1156,7 @@ function SettingsAppearance() {
           <div className="stg-card-t">Thème</div>
           <div className="stg-card-s">Sombre ou clair, ou suit votre système.</div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+        <div className="stg-grid-3">
           {THEMES.map(t => {
             const active = t.id === theme;
             return (
@@ -1366,10 +1366,7 @@ function SettingsAbout() {
           <div className="stg-card-t">Dépendances open source</div>
           <div className="stg-card-s">Ambre n'existerait pas sans le travail de ces communautés.</div>
         </div>
-        <div style={{
-          display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10,
-          fontFamily: "var(--font-mono)", fontSize: 11.5
-        }}>
+        <div className="stg-grid-4" style={{ fontFamily: "var(--font-mono)", fontSize: 11.5 }}>
           {[
             ["Tauri", "Apache 2.0"], ["React", "MIT"],
             ["SQLite", "Public domain"], ["Recharts", "MIT"],
@@ -1540,4 +1537,48 @@ const STG_STYLES = `
                  font-size: 15px; color: var(--amber-500); }
   .stg-tpl-t { font-size: 12.5px; color: var(--ink-900); font-weight: 500; }
   .stg-tpl-d { font-size: 11px; color: var(--ink-500); }
+
+  /* Grilles inline converties en classes */
+  .stg-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .stg-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+                font-family: var(--font-mono); font-size: 11.5px; }
+
+  @media (max-width: 768px) {
+    /* Layout principal : nav latérale → onglets horizontaux */
+    .stg-main {
+      grid-template-columns: 1fr;
+      height: auto; overflow: auto;
+      padding: 0;
+    }
+    .stg-sub {
+      flex-direction: row; overflow-x: auto; padding: 12px 12px 0;
+      gap: 4px; border-bottom: 1px solid var(--line);
+    }
+    .stg-sub-h, .stg-sub-title, .stg-sub-foot { display: none; }
+    .stg-sub-item {
+      flex-shrink: 0; white-space: nowrap;
+      border-radius: 999px; padding: 6px 12px; font-size: 12px;
+    }
+    .stg-sub-item.active {
+      background: var(--amber-100); color: var(--amber-500);
+      border-left: none; padding-left: 12px;
+    }
+    .stg-content { padding: 14px 12px 80px; overflow: visible; }
+    .stg-top { flex-direction: column; gap: 6px; }
+    .stg-row { grid-template-columns: 1fr; gap: 8px; }
+    /* Grilles compactes */
+    .stg-grid-3 { grid-template-columns: 1fr; }
+    .stg-grid-4 { grid-template-columns: 1fr 1fr; }
+    /* Tableau d'alertes */
+    .stg-alert {
+      grid-template-columns: 36px 1fr 36px 28px;
+      gap: 8px; padding: 12px 14px;
+    }
+    .stg-alert-thr, .stg-alert-state,
+    .stg-alert > :nth-child(5) { display: none; }
+    /* Canaux */
+    .stg-channels { grid-template-columns: 1fr; }
+    /* Templates d'alertes */
+    .stg-tpl-grid { grid-template-columns: 1fr 1fr; }
+  }
 `;
