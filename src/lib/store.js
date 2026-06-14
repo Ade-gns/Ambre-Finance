@@ -12,7 +12,7 @@ export const DEFAULT_CATS = [
   { id: "aut",  label: "Autre",         color: "#9d8b73", budget: 0,    iconIdx: 0 },
 ];
 
-const MONTHS_FR   = ["","Janv.","Févr.","Mars","Avril","Mai","Juin","Juil.","Août","Sept.","Oct.","Nov.","Déc."];
+export const MONTHS_FR   = ["","Janv.","Févr.","Mars","Avril","Mai","Juin","Juil.","Août","Sept.","Oct.","Nov.","Déc."];
 const MONTHS_FULL = ["","Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const DOW_FR      = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
 

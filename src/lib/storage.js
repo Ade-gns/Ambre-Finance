@@ -6,22 +6,23 @@ export function load(key, defaultValue) { return dbGet(key, defaultValue); }
 
 export function useLocalStorage(key, defaultValue) {
   const [state, setState] = useState(() => dbGet(key, defaultValue));
-  const skipDispatch = useRef(false);
+  const skipDispatch = useRef(0);
 
   // Persiste + notifie les autres instances du même key
   useEffect(() => {
     dbSet(key, state);
-    if (!skipDispatch.current) {
+    if (skipDispatch.current > 0) {
+      skipDispatch.current--;
+    } else {
       window.dispatchEvent(new CustomEvent("ambre:storage", { detail: { key, value: state } }));
     }
-    skipDispatch.current = false;
   }, [key, state]);
 
   // Reçoit les mises à jour des autres instances
   useEffect(() => {
     const handler = e => {
       if (e.detail?.key === key) {
-        skipDispatch.current = true; // on ne re-dispatche pas, pour éviter la boucle
+        skipDispatch.current++;
         setState(e.detail.value);
       }
     };

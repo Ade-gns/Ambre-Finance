@@ -4,6 +4,8 @@
 
 /* ───── helpers ───── */
 export const lerp = (a, b, t) => a + (b - a) * t;
+let _gradCounter = 0;
+const nextGradId = (prefix) => `${prefix}-${++_gradCounter}`;
 
 export const fmtEUR = (n, frac = 0) =>
   new Intl.NumberFormat("fr-FR", {
@@ -32,6 +34,7 @@ export function pathSmooth(points, tension = 0.35) {
 
 /* ───── Sparkline ───── */
 export function Sparkline({ data, width = 120, height = 32, color = "#b8693d", fill = true, strokeWidth = 1.5 }) {
+  if (!data || data.length < 2) return <svg width={width} height={height} style={{ display: "block" }} />;
   const min = Math.min(...data), max = Math.max(...data);
   const range = max - min || 1;
   const pad = 2;
@@ -41,7 +44,7 @@ export function Sparkline({ data, width = 120, height = 32, color = "#b8693d", f
   ]);
   const d = pathSmooth(pts);
   const area = `${d} L ${pts[pts.length-1][0]} ${height} L ${pts[0][0]} ${height} Z`;
-  const gradId = "sg-" + Math.random().toString(36).slice(2, 8);
+  const gradId = nextGradId("sg");
   return (
     <svg width={width} height={height} style={{ display: "block" }}>
       {fill && <defs>
@@ -92,6 +95,7 @@ export function Donut({ data, size = 220, thickness = 28, gap = 0.012, centerLab
 
 /* ───── Area chart (single series) ───── */
 export function AreaChart({ data, width = 520, height = 180, color = "#b8693d", yTicks = 4, padX = 8, padY = 18 }) {
+  if (!data || data.length < 2) return <svg width={width} height={height} style={{ display: "block" }} />;
   const vals = data.map(d => d.v);
   const min = Math.min(...vals, 0);
   const max = Math.max(...vals);
@@ -103,7 +107,7 @@ export function AreaChart({ data, width = 520, height = 180, color = "#b8693d", 
   const pts = xs.map((x, i) => [x, ys[i]]);
   const line = pathSmooth(pts);
   const area = `${line} L ${xs[xs.length - 1]} ${padY + innerH} L ${xs[0]} ${padY + innerH} Z`;
-  const gradId = "ag-" + Math.random().toString(36).slice(2, 8);
+  const gradId = nextGradId("ag");
 
   const ticks = Array.from({ length: yTicks + 1 }, (_, i) => i / yTicks);
   return (
@@ -141,6 +145,7 @@ export function AreaChart({ data, width = 520, height = 180, color = "#b8693d", 
 
 /* ───── Stacked area (multi-series) ───── */
 export function StackedArea({ series, labels, width = 600, height = 220, padX = 8, padY = 20 }) {
+  if (!labels || labels.length < 2) return <svg width={width} height={height} style={{ display: "block" }} />;
   const n = labels.length;
   const totals = Array(n).fill(0);
   series.forEach(s => s.values.forEach((v, i) => totals[i] += v));

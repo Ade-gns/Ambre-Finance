@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 import {
   useTransactions, useCategories,
   computeMonthly, computeCatTotals,
-  txMonthKey, monthKeyLabel, parseTxDate
+  txMonthKey, monthKeyLabel, parseTxDate, MONTHS_FR
 } from "../lib/store";
 import {
   Sparkline, RingGauge, fmtEUR, pathSmooth
@@ -572,7 +572,7 @@ export default function Dashboard() {
                 return Object.entries(grouped).slice(0, 4).map(([day, items]) => {
                   const parts = day.split("/");
                   const num = parts[0];
-                  const monthShort = parts.length >= 2 ? ["","Janv","Févr","Mars","Avr","Mai","Juin","Juil","Août","Sept","Oct","Nov","Déc"][parseInt(parts[1], 10)] || "" : "";
+                  const monthShort = parts.length >= 2 ? MONTHS_FR[parseInt(parts[1], 10)] || "" : "";
                   return (
                     <div key={day} className="atc-tl-day">
                       <div className="atc-tl-date">

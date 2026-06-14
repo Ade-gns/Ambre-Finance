@@ -392,8 +392,8 @@ function TxDefault({ onRowClick, onSelectMany }) {
       : t.cat === "epa";
     const matchSearch = !q || (t.lbl || "").toLowerCase().includes(q) || (t.sub || "").toLowerCase().includes(q);
     const matchCat = catSel.length === 0 || catSel.includes(t.cat);
-    const mNum = MONTH_NUM[month.split(" ")[0]];
-    const mYear = month.split(" ")[1] ? parseInt(month.split(" ")[1], 10) : null;
+    const mNum = MONTH_NUM[month?.split(" ")[0]];
+    const mYear = month?.split(" ")[1] ? parseInt(month.split(" ")[1], 10) : null;
     const matchMonth = !mNum || (() => {
       const p = (t.d || "").split("/");
       if (p.length < 2) return false;
@@ -434,7 +434,7 @@ function TxDefault({ onRowClick, onSelectMany }) {
                 </div>
                 {g.txs.map((t, i) => (
                   <TxRow key={gi + "-" + i} t={t} catDefs={catDefs} onClick={() => onRowClick(t)}
-                         onCheckboxClick={() => onSelectMany(allTxs.indexOf(t))}/>
+                         onCheckboxClick={() => onSelectMany(allTxs.findIndex(tx => tx.id === t.id))}/>
                 ))}
               </div>
             );
@@ -458,7 +458,7 @@ function TxDefault({ onRowClick, onSelectMany }) {
             <button className="tx-btn" disabled>→</button>
           </div>
           <span style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <button className="tx-btn ghost" onClick={onSelectMany} style={{ fontSize: 11 }}>
+            <button className="tx-btn ghost" onClick={() => onSelectMany()} style={{ fontSize: 11 }}>
               Sélectionner plusieurs
             </button>
             <span>Voir : <strong>50 par page</strong></span>
@@ -513,6 +513,7 @@ function TxDetail({ t: tSel, onClose }) {
   const [catPickerOpen, setCatPickerOpen] = useState(false);
   const [deleteState, setDeleteState] = useState(false);
   const [ruleCreated, setRuleCreated] = useState(false);
+  const [showRulePrompt, setShowRulePrompt] = useState(false);
   const catSel = txCatStyle(catId, catDefs);
   const allCats = catDefs;
 
@@ -596,9 +597,12 @@ function TxDetail({ t: tSel, onClose }) {
                           borderRadius: 10, padding: 6, boxShadow: "0 4px 14px var(--shadow-soft)" }}>
               {allCats.map(c => (
                 <div key={c.id} onClick={() => {
+                  const changed = c.id !== catId;
                   setCatId(c.id);
                   setAllTxs(prev => prev.map(t => String(t.id) === String(tSel.id) ? { ...t, cat: c.id } : t));
                   setCatPickerOpen(false);
+                  setRuleCreated(false);
+                  setShowRulePrompt(changed && similarTxs.length > 0 && !!simLbl);
                 }}
                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px",
                               borderRadius: 7, cursor: "pointer", fontSize: 12,
@@ -623,6 +627,39 @@ function TxDetail({ t: tSel, onClose }) {
             <span className="val mono" style={{ fontSize: 11 }}>FR76 3000 4001 …7849</span>
           </div>
         </div>
+
+        {showRulePrompt && !ruleCreated && (
+          <div style={{ background: "var(--amber-100)", border: "1px solid var(--amber-500)",
+                        borderRadius: 10, padding: "12px 14px", display: "flex",
+                        flexDirection: "column", gap: 8 }}>
+            <div style={{ fontSize: 12, color: "var(--ink-800)", fontWeight: 500 }}>
+              {similarTxs.length} opération{similarTxs.length > 1 ? "s" : ""} similaire{similarTxs.length > 1 ? "s" : ""} trouvée{similarTxs.length > 1 ? "s" : ""}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--ink-600)" }}>
+              Créer une règle pour classer automatiquement « {simLbl} » dans cette catégorie ?
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button className="tx-btn amber" style={{ fontSize: 11, padding: "4px 10px" }}
+                      onClick={() => { handleCreateRule(); setShowRulePrompt(false); }}>
+                Oui, créer la règle
+              </button>
+              <button className="tx-btn ghost" style={{ fontSize: 11, padding: "4px 10px" }}
+                      onClick={() => setShowRulePrompt(false)}>
+                Non merci
+              </button>
+            </div>
+          </div>
+        )}
+        {ruleCreated && (
+          <div style={{ background: "var(--cream-100)", border: "1px solid var(--line)",
+                        borderRadius: 10, padding: "10px 14px", fontSize: 11,
+                        color: "var(--ink-600)", display: "flex", alignItems: "center", gap: 8 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--sage-500)" strokeWidth="2.2" strokeLinecap="round">
+              <path d="M20 6L9 17l-5-5"/>
+            </svg>
+            Règle « {simLbl} » créée — les prochaines transactions seront classées automatiquement.
+          </div>
+        )}
 
         <div className="tx-detail-section">
           <div className="tx-detail-section-t">Notes & étiquettes</div>
@@ -787,9 +824,10 @@ function TxEmpty() {
    Vue 4 — Sélection multiple (bulk actions)
    ───────────────────────────────────────────────────────────────── */
 function TxBulk({ onClose, startIdx }) {
-  const [allTxs]  = useTransactions();
+  const [allTxs, setAllTxs] = useTransactions();
   const [catDefs] = useCategories();
-  const [selected, setSelected] = useState(() => startIdx != null ? [startIdx] : []);
+  const [selected, setSelected] = useState(() => startIdx != null && startIdx >= 0 ? [startIdx] : []);
+  const [recatOpen, setRecatOpen] = useState(false);
 
   const toggle     = idx => setSelected(prev =>
     prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
@@ -797,11 +835,24 @@ function TxBulk({ onClose, startIdx }) {
   const selectAll   = () => setSelected(allTxs.map((_, i) => i));
   const deselectAll = () => setSelected([]);
 
+  const recategorize = catId => {
+    const ids = new Set(selected.map(i => allTxs[i]?.id).filter(Boolean));
+    setAllTxs(prev => prev.map(t => ids.has(t.id) ? { ...t, cat: catId } : t));
+    setRecatOpen(false);
+    deselectAll();
+  };
+
+  const deleteSelected = () => {
+    const ids = new Set(selected.map(i => allTxs[i]?.id).filter(Boolean));
+    setAllTxs(prev => prev.filter(t => !ids.has(t.id)));
+    onClose();
+  };
+
   const selCount = selected.length;
   const selTotal = selected.reduce((s, i) => s + Math.abs(allTxs[i]?.amt || 0), 0);
 
   return (
-    <main className="tx-main">
+    <main className="tx-main" onClick={() => setRecatOpen(false)}>
       <TxHeader onExport={() => exportTxCSV(selected.map(i => allTxs[i]).filter(Boolean), "selection.csv")} />
 
       {/* Bulk action bar (remplace la toolbar) */}
@@ -823,27 +874,29 @@ function TxBulk({ onClose, startIdx }) {
           <span onClick={deselectAll}>Désélectionner</span>
         </span>
         <span className="tx-bulk-sep"/>
-        <button className="tx-bulk-action amber">
-          <IcTag size={13}/>Re-catégoriser… <IcChevDn size={11}/>
-        </button>
-        <div className="tx-cat-picker">
-          <span><span className="amb-dot" style={{ background: "#b8693d" }}/>Alimentation</span>
-          <span className="hi"><span className="amb-dot" style={{ background: "#6b7a4f" }}/>Transports</span>
-          <span><span className="amb-dot" style={{ background: "#a85a48" }}/>Loisirs</span>
+        <div style={{ position: "relative" }}>
+          <button className="tx-bulk-action amber" disabled={selCount === 0}
+                  onClick={e => { e.stopPropagation(); setRecatOpen(o => !o); }}>
+            <IcTag size={13}/>Re-catégoriser… <IcChevDn size={11}/>
+          </button>
+          {recatOpen && (
+            <div className="tx-cat-picker" onClick={e => e.stopPropagation()}>
+              {catDefs.filter(c => c.id !== "inc").map(c => (
+                <span key={c.id} onClick={() => recategorize(c.id)}>
+                  <span className="amb-dot" style={{ background: c.color }}/>{c.label}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <span className="tx-bulk-sep"/>
-        <button className="tx-bulk-action">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2l2.4 7.4H22l-6 4.6 2.4 7.4-6.4-4.6L5.6 21.4 8 14 2 9.4h7.6z"/>
-          </svg>
-          Créer une règle
-        </button>
         <button className="tx-bulk-action"
+                disabled={selCount === 0}
                 onClick={() => exportTxCSV(selected.map(i => allTxs[i]).filter(Boolean), "selection.csv")}>
           Exporter…
         </button>
-        <button className="tx-bulk-action danger">
+        <button className="tx-bulk-action danger" disabled={selCount === 0}
+                onClick={deleteSelected}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 6h18"/>
@@ -866,7 +919,7 @@ function TxBulk({ onClose, startIdx }) {
         <div className="tx-tbody">
           {getWeekGroups(allTxs).map((g, gi) => {
             // Find global indices for this group's transactions
-            const groupWithIdx = g.txs.map(t => ({ t, idx: allTxs.indexOf(t) }));
+            const groupWithIdx = g.txs.map(t => ({ t, idx: allTxs.findIndex(tx => tx.id === t.id) }));
             const selInGroup = groupWithIdx.filter(({ idx }) => selected.includes(idx)).length;
             return (
               <div key={g.key}>

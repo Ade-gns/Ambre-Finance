@@ -913,9 +913,10 @@ function ImportPreview({ onConfirm, onCancel, txs, fileName, fileSize }) {
                          background: var(--cream-50); border: 1px solid var(--amber-500);
                          border-radius: 10px; padding: 6px; min-width: 160px;
                          box-shadow: 0 4px 14px var(--shadow-soft); }
-        .ip-cat-picker div { display: flex; align-items: center; gap: 8px; padding: 7px 10px;
-                              border-radius: 7px; cursor: pointer; font-size: 12px; }
-        .ip-cat-picker div:hover { background: var(--amber-100); }
+        .ip-cat-picker-list { max-height: 168px; overflow-y: auto; }
+        .ip-cat-picker-list > div { display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+                                    border-radius: 7px; cursor: pointer; font-size: 12px; }
+        .ip-cat-picker-list > div:hover { background: var(--amber-100); }
 
         .ip-amt { font-family: var(--font-mono); font-size: 13px; text-align: right;
                   color: var(--ink-800); font-weight: 500; }
@@ -1052,18 +1053,20 @@ function ImportPreview({ onConfirm, onCancel, txs, fileName, fileSize }) {
                     )}
                     {catPickerRow === origIdx && (
                       <div className="ip-cat-picker" onClick={e => e.stopPropagation()}>
-                        {categories.map(c => (
-                          <div key={c.id}
-                               style={{ color: t.cat === c.id ? "var(--amber-500)" : "var(--ink-800)",
-                                        background: t.cat === c.id ? "var(--amber-100)" : undefined }}
-                               onClick={() => {
-                                 setCatOverrides(prev => ({ ...prev, [origIdx]: c.id }));
-                                 setCatPickerRow(null); setNewCatForRow(null);
-                               }}>
-                            <span className="amb-dot" style={{ background: c.color }}/>
-                            {c.label}
-                          </div>
-                        ))}
+                        <div className="ip-cat-picker-list">
+                          {categories.map(c => (
+                            <div key={c.id}
+                                 style={{ color: t.cat === c.id ? "var(--amber-500)" : "var(--ink-800)",
+                                          background: t.cat === c.id ? "var(--amber-100)" : undefined }}
+                                 onClick={() => {
+                                   setCatOverrides(prev => ({ ...prev, [origIdx]: c.id }));
+                                   setCatPickerRow(null); setNewCatForRow(null);
+                                 }}>
+                              <span className="amb-dot" style={{ background: c.color }}/>
+                              {c.label}
+                            </div>
+                          ))}
+                        </div>
                         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 4, marginTop: 4 }}>
                           {newCatForRow === origIdx ? (
                             <div onClick={e => e.stopPropagation()} style={{ padding: "4px 8px" }}>
