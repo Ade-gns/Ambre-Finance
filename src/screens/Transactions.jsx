@@ -769,6 +769,11 @@ function TxDetail({ t: tSel, onClose }) {
   const [deleteState, setDeleteState] = useState(false);
   const [ruleCreated, setRuleCreated] = useState(false);
   const [showRulePrompt, setShowRulePrompt] = useState(false);
+  const [note, setNote]               = useState(tSel.note || "");
+
+  const saveNote = val => {
+    setAllTxs(prev => prev.map(t => String(t.id) === String(tSel.id) ? { ...t, note: val } : t));
+  };
   const catSel = txCatStyle(catId, catDefs);
   const allCats = catDefs;
 
@@ -912,19 +917,15 @@ function TxDetail({ t: tSel, onClose }) {
         )}
 
         <div className="tx-detail-section">
-          <div className="tx-detail-section-t">Notes & étiquettes</div>
-          <div className="tx-notes">
-            <em style={{ color: "var(--ink-500)" }}>Courses de la semaine — légumes, fromage, vin.</em>
-          </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            <span className="tx-chip" style={{ fontSize: 10 }}>
-              <span className="amb-dot" style={{ background: "var(--amber-500)" }}/>récurrent
-            </span>
-            <span className="tx-chip" style={{ fontSize: 10 }}>épicerie</span>
-            <button className="tx-chip" style={{ fontSize: 10, color: "var(--ink-500)" }}>
-              <IcPlus size={10}/> Étiquette
-            </button>
-          </div>
+          <div className="tx-detail-section-t">Notes</div>
+          <textarea
+            className="tx-notes"
+            placeholder="Ajouter une note…"
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            onBlur={e => saveNote(e.target.value)}
+            rows={3}
+          />
         </div>
 
         {similarTxs.length > 0 && (
@@ -1356,7 +1357,11 @@ const TX_STYLES = `
   .tx-field.editable:hover { border-color: var(--amber-500); }
 
   .tx-notes { background: var(--cream-100); border: 1px solid var(--line); border-radius: 8px;
-              padding: 10px 12px; min-height: 56px; font-size: 12px; color: var(--ink-700); }
+              padding: 10px 12px; min-height: 56px; font-size: 12px; color: var(--ink-700);
+              font-family: inherit; resize: vertical; outline: none; width: 100%;
+              box-sizing: border-box; line-height: 1.5; }
+  .tx-notes:focus { border-color: var(--amber-500); }
+  .tx-notes::placeholder { color: var(--ink-400); font-style: italic; }
 
   .tx-similar { display: flex; flex-direction: column; gap: 6px; }
   .tx-similar-row { display: grid; grid-template-columns: 50px 1fr 80px;
