@@ -536,8 +536,31 @@ function TxSummaryReal({ txs = [], month = "", allCount = 0 }) {
   );
 }
 
-function TxRow({ t, selected, bulk, dense, onClick, onCheckboxClick, catDefs = [] }) {
+function TxRow({ t, selected, bulk, dense, onClick, onCheckboxClick, catDefs = [],
+                 menuOpen = false, onMenuToggle, onDelete, onRecategorize }) {
   const cat = txCatStyle(t.cat, catDefs);
+  const [recatOpen,  setRecatOpen]  = useState(false);
+  const [copied,     setCopied]     = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+
+  useEffect(() => {
+    if (!menuOpen) { setRecatOpen(false); setCopied(false); setConfirmDel(false); }
+  }, [menuOpen]);
+
+  const handleCopy = e => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(t.lbl).then(() => {
+      setCopied(true);
+      setTimeout(() => { setCopied(false); onMenuToggle?.(); }, 900);
+    });
+  };
+
+  const handleDelete = e => {
+    e.stopPropagation();
+    if (confirmDel) { onDelete?.(); }
+    else { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 2500); }
+  };
+
   return (
     <div className={"tx-row" +
                     (selected ? " selected" : "") +
@@ -568,12 +591,49 @@ function TxRow({ t, selected, bulk, dense, onClick, onCheckboxClick, catDefs = [
       <span className={"tx-amt" + (t.amt > 0 ? " pos" : "")}>
         {t.amt > 0 ? "+" : ""}{fmtEUR(t.amt, 2)}
       </span>
-      <button className="tx-menu" onClick={(e) => e.stopPropagation()}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-             strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
-        </svg>
-      </button>
+      <div style={{ position: "relative" }}>
+        <button className={"tx-menu" + (menuOpen ? " active" : "")}
+                onClick={e => { e.stopPropagation(); onMenuToggle?.(); }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+               strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
+          </svg>
+        </button>
+        {menuOpen && onMenuToggle && (
+          <div className="tx-ctx-menu" onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}>
+            <button className="tx-ctx-item" onClick={e => { e.stopPropagation(); onClick(); onMenuToggle(); }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+              Voir le détail
+            </button>
+            <button className="tx-ctx-item" onClick={handleCopy}>
+              {copied
+                ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--sage-500)" strokeWidth="2" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg><span style={{ color: "var(--sage-500)" }}>Copié !</span></>
+                : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copier le libellé</>}
+            </button>
+            <button className="tx-ctx-item" onClick={e => { e.stopPropagation(); setRecatOpen(o => !o); }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+              Recatégoriser
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginLeft: "auto", transform: recatOpen ? "rotate(180deg)" : "none" }}><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            {recatOpen && (
+              <div className="tx-ctx-cats">
+                {catDefs.filter(c => c.id !== "inc").map(c => (
+                  <span key={c.id} className={"tx-ctx-cat" + (t.cat === c.id ? " active" : "")}
+                        style={{ "--cat-color": c.color }}
+                        onClick={e => { e.stopPropagation(); onRecategorize?.(c.id); }}>
+                    <span className="amb-dot" style={{ background: c.color }}/>{c.label}
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="tx-ctx-sep"/>
+            <button className={"tx-ctx-item danger" + (confirmDel ? " confirm" : "")} onClick={handleDelete}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              {confirmDel ? "Confirmer la suppression ?" : "Supprimer"}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -602,8 +662,23 @@ function TxDefault({ onRowClick, onSelectMany }) {
   const [allTxs, setAllTxs] = useTransactions();
   const [catDefs] = useCategories();
   const [showAddModal, setShowAddModal] = useState(false);
+  const [openMenuId,  setOpenMenuId]   = useState(null);
 
   const handleAdd = tx => setAllTxs(prev => [tx, ...prev]);
+
+  // Ferme le menu sur clic extérieur ou Escape
+  useEffect(() => {
+    if (!openMenuId) return;
+    const onKey  = e => { if (e.key === "Escape") setOpenMenuId(null); };
+    const onDown = ()  => setOpenMenuId(null);
+    document.addEventListener("keydown",   onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      document.removeEventListener("keydown",   onKey);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [openMenuId]);
+
   const realMonths = txMonths(allTxs).map(k => monthKeyLabel(k));
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -682,7 +757,11 @@ function TxDefault({ onRowClick, onSelectMany }) {
                 </div>
                 {g.txs.map((t, i) => (
                   <TxRow key={gi + "-" + i} t={t} catDefs={catDefs} onClick={() => onRowClick(t)}
-                         onCheckboxClick={() => onSelectMany(allTxs.findIndex(tx => tx.id === t.id))}/>
+                         onCheckboxClick={() => onSelectMany(allTxs.findIndex(tx => tx.id === t.id))}
+                         menuOpen={openMenuId === t.id}
+                         onMenuToggle={() => setOpenMenuId(openMenuId === t.id ? null : t.id)}
+                         onDelete={() => { setAllTxs(prev => prev.filter(tx => String(tx.id) !== String(t.id))); setOpenMenuId(null); }}
+                         onRecategorize={catId => { setAllTxs(prev => prev.map(tx => String(tx.id) === String(t.id) ? { ...tx, cat: catId } : tx)); setOpenMenuId(null); }}/>
                 ))}
               </div>
             );
@@ -1317,6 +1396,28 @@ const TX_STYLES = `
 
   .tx-menu { width: 24px; height: 24px; padding: 0; border: none; background: transparent;
              color: var(--ink-500); border-radius: 6px; cursor: pointer; }
+  .tx-menu.active,
+  .tx-menu:hover { background: var(--cream-200); color: var(--ink-800); }
+
+  .tx-ctx-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 60;
+                 background: var(--cream-50); border: 1px solid var(--line);
+                 border-radius: 10px; padding: 5px;
+                 box-shadow: 0 8px 28px var(--shadow-modal); min-width: 200px; }
+  .tx-ctx-item { display: flex; align-items: center; gap: 9px; width: 100%;
+                 padding: 8px 10px; border-radius: 6px; border: none;
+                 background: transparent; color: var(--ink-700);
+                 font-size: 12.5px; cursor: pointer; text-align: left; }
+  .tx-ctx-item:hover { background: var(--cream-100); color: var(--ink-900); }
+  .tx-ctx-item.danger { color: var(--rose-500); }
+  .tx-ctx-item.danger:hover { background: rgba(168,90,72,0.08); }
+  .tx-ctx-item.danger.confirm { background: rgba(168,90,72,0.10); font-weight: 500; }
+  .tx-ctx-sep { height: 1px; background: var(--line); margin: 4px 0; }
+  .tx-ctx-cats { display: grid; grid-template-columns: 1fr 1fr; gap: 3px;
+                 padding: 4px 6px 6px; }
+  .tx-ctx-cat { display: flex; align-items: center; gap: 6px; padding: 5px 8px;
+                border-radius: 6px; cursor: pointer; font-size: 11px; color: var(--ink-700); }
+  .tx-ctx-cat:hover { background: var(--cream-200); }
+  .tx-ctx-cat.active { background: var(--amber-100); color: var(--amber-500); font-weight: 500; }
 
   .tx-pagination { display: flex; align-items: center; justify-content: space-between;
                    padding: 10px 18px; border-top: 1px solid var(--line);
