@@ -656,7 +656,10 @@ function TxDefault({ onRowClick, onSelectMany }) {
   return (
     <main className="tx-main">
       {showAddModal && <TxAddModal onClose={() => setShowAddModal(false)} onAdd={handleAdd}/>}
-      <TxHeader onExport={() => exportTxCSV(allTxs)} onAdd={() => setShowAddModal(true)}/>
+      <TxHeader onExport={() => {
+        const filename = `transactions-${month.replace(" ", "-").toLowerCase()}.csv`;
+        exportTxCSV(filtered, filtered.length < allTxs.length ? filename : "transactions.csv");
+      }} onAdd={() => setShowAddModal(true)}/>
       <TxFilterBar filter={filter} onChangeFilter={setFilter} counts={counts}
                    search={search} onSearch={setSearch}
                    catSel={catSel} onCatSelChange={setCatSel}
