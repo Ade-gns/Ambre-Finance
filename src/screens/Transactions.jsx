@@ -1159,10 +1159,53 @@ function TxBulk({ onClose, startIdx }) {
   const [selected, setSelected] = useState(() => startIdx != null && startIdx >= 0 ? [startIdx] : []);
   const [recatOpen, setRecatOpen] = useState(false);
 
-  const toggle     = idx => setSelected(prev =>
+  // Filtres
+  const realMonths = txMonths(allTxs).map(k => monthKeyLabel(k));
+  const [month, setMonth] = useState(() => {
+    const sorted = [...allTxs].sort((a, b) => (b.d || "").localeCompare(a.d || ""));
+    if (sorted.length > 0 && sorted[0].d) {
+      const p = sorted[0].d.split("/");
+      if (p.length >= 3) {
+        const mNames = ["","Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+        const mName = mNames[parseInt(p[1], 10)];
+        if (mName) return mName + " " + p[2];
+      }
+    }
+    return realMonths[realMonths.length - 1] || "";
+  });
+  const [search,    setSearch]    = useState("");
+  const [monthOpen, setMonthOpen] = useState(false);
+  const monthRef = useRef(null);
+
+  useEffect(() => {
+    if (!monthOpen) return;
+    const fn = e => { if (!monthRef.current?.contains(e.target)) setMonthOpen(false); };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, [monthOpen]);
+
+  // Transactions visibles selon filtres
+  const visibleTxs = allTxs.filter(t => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || (t.lbl || "").toLowerCase().includes(q) || (t.sub || "").toLowerCase().includes(q);
+    const mNum  = MONTH_NUM[month?.split(" ")[0]];
+    const mYear = month?.split(" ")[1] ? parseInt(month.split(" ")[1], 10) : null;
+    const matchMonth = !mNum || (() => {
+      const p = (t.d || "").split("/");
+      if (p.length < 2) return false;
+      const tMonth = parseInt(p[1], 10);
+      const tYear  = p.length >= 3 ? parseInt(p[2], 10) : null;
+      return tMonth === mNum && (!mYear || !tYear || tYear === mYear);
+    })();
+    return matchSearch && matchMonth;
+  });
+
+  const toggle         = idx => setSelected(prev =>
     prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
   );
-  const selectAll   = () => setSelected(allTxs.map((_, i) => i));
+  const selectAllVisible = () => setSelected(
+    visibleTxs.map(t => allTxs.findIndex(tx => tx.id === t.id)).filter(i => i >= 0)
+  );
   const deselectAll = () => setSelected([]);
 
   const recategorize = catId => {
@@ -1199,7 +1242,7 @@ function TxBulk({ onClose, startIdx }) {
           </span>
         </span>
         <span style={{ fontSize: 11, color: "var(--cream-300)", cursor: "pointer" }}>
-          <span onClick={selectAll}>Tout sélectionner ({allTxs.length})</span>
+          <span onClick={selectAllVisible}>Tout sélectionner ({visibleTxs.length})</span>
           {" · "}
           <span onClick={deselectAll}>Désélectionner</span>
         </span>
@@ -1242,12 +1285,46 @@ function TxBulk({ onClose, startIdx }) {
         </button>
       </div>
 
+      {/* Filtres bulk */}
+      <div className="tx-bulk-filters">
+        <div ref={monthRef} style={{ position: "relative" }}>
+          <button className="tx-btn" onClick={e => { e.stopPropagation(); setMonthOpen(o => !o); }}
+                  onMouseDown={e => e.stopPropagation()}>
+            <IcCalendar size={13}/>{month || "Tous les mois"}<IcChevDn size={11}/>
+          </button>
+          {monthOpen && (
+            <div className="tx-cat-picker" onClick={e => e.stopPropagation()}
+                 onMouseDown={e => e.stopPropagation()}>
+              <span onClick={() => { setMonth(""); setMonthOpen(false); }}
+                    style={{ fontStyle: "italic", opacity: 0.7 }}>
+                Tous les mois
+              </span>
+              {realMonths.map(m => (
+                <span key={m} onClick={() => { setMonth(m); setMonthOpen(false); }}
+                      style={{ fontWeight: m === month ? 600 : undefined }}>
+                  {m}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="tx-search" style={{ flex: 1, minWidth: 0 }}>
+          <IcSearch size={13}/>
+          <input placeholder="Filtrer par libellé…" value={search}
+                 onChange={e => setSearch(e.target.value)}/>
+          {search && <span className="tx-search-clear" onClick={() => setSearch("")}>×</span>}
+        </div>
+        <span style={{ fontSize: 11, color: "var(--ink-500)", whiteSpace: "nowrap" }}>
+          {visibleTxs.length} transaction{visibleTxs.length !== 1 ? "s" : ""} affichée{visibleTxs.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+
       <TxSummaryReal txs={selected.map(i => allTxs[i]).filter(Boolean)} allCount={allTxs.length}/>
 
       <div className="tx-table">
         <TxTableHead />
         <div className="tx-tbody">
-          {getWeekGroups(allTxs).map((g, gi) => {
+          {getWeekGroups(visibleTxs).map((g, gi) => {
             // Find global indices for this group's transactions
             const groupWithIdx = g.txs.map(t => ({ t, idx: allTxs.findIndex(tx => tx.id === t.id) }));
             const selInGroup = groupWithIdx.filter(({ idx }) => selected.includes(idx)).length;
@@ -1497,6 +1574,10 @@ const TX_STYLES = `
   .tx-bulk-close { margin-left: auto; width: 26px; height: 26px; border-radius: 6px;
                    background: transparent; border: none; color: var(--cream-300);
                    display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .tx-bulk-filters { display: flex; align-items: center; gap: 10px; padding: 8px 4px; }
+  .tx-search-clear { font-size: 14px; color: var(--ink-500); cursor: pointer; line-height: 1;
+                     padding: 0 2px; }
+  .tx-search-clear:hover { color: var(--ink-800); }
 
   .tx-cat-picker { display: flex; gap: 6px; padding: 0 6px; }
   .tx-cat-picker > span { padding: 4px 9px; border-radius: 999px;
