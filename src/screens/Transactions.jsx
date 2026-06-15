@@ -367,7 +367,6 @@ function TxFilterBar({ withChips = true, filter = "all", onChangeFilter = () => 
                        search = "", onSearch = () => {},
                        catSel = [], onCatSelChange = () => {},
                        month = "Mai 2026", onMonthChange = () => {},
-                       sortDir = "desc", onSortDir = () => {},
                        monthsOpt = [], catOpt = [] }) {
   const segs = [
     { key: "all", label: "Tout",       n: counts.all },
@@ -471,13 +470,6 @@ function TxFilterBar({ withChips = true, filter = "all", onChangeFilter = () => 
             </div>
           )}
         </div>
-        <button className="tx-btn" onClick={() => onSortDir(sortDir === "desc" ? "asc" : "desc")}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
-               strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 6h13M3 12h9M3 18h5M14 10l3 3-3 3M17 13H21"/>
-          </svg>
-          Date {sortDir === "desc" ? "↓" : "↑"}
-        </button>
       </div>
 
       {withChips && (catSel.length > 0 || search) && (
@@ -638,16 +630,27 @@ function TxRow({ t, selected, bulk, dense, onClick, onCheckboxClick, catDefs = [
   );
 }
 
-function TxTableHead() {
+function TxTableHead({ sortCol = "date", sortDir = "desc", onSort }) {
+  const col = (key, label, right) => {
+    const active = sortCol === key;
+    return (
+      <span className={onSort ? ("th-sort" + (active ? " active" : "")) : (key === "date" ? "sort" : "")}
+            style={right ? { textAlign: "right" } : undefined}
+            onClick={() => onSort?.(key)}>
+        {label}
+        {onSort && active ? (sortDir === "desc" ? " ↓" : " ↑") : onSort ? <span style={{ opacity: 0.25 }}> ↕</span> : (key === "date" ? <IcArrowDn size={10}/> : null)}
+      </span>
+    );
+  };
   return (
     <div className="tx-thead">
       <span/>
-      <span className="sort">Date <IcArrowDn size={10}/></span>
-      <span>Libellé</span>
-      <span>Compte</span>
-      <span>Catégorie</span>
-      <span>Mode</span>
-      <span style={{ textAlign: "right" }}>Montant</span>
+      {col("date", "Date")}
+      {col("lbl", "Libellé")}
+      {col("acc", "Compte")}
+      {col("cat", "Catégorie")}
+      {col("mode", "Mode")}
+      {col("amt", "Montant", true)}
       <span/>
     </div>
   );
@@ -696,7 +699,13 @@ function TxDefault({ onRowClick, onSelectMany }) {
     }
     return "Mai 2026";
   });
+  const [sortCol, setSortCol] = useState("date");
   const [sortDir, setSortDir] = useState("desc");
+
+  const handleSort = key => {
+    if (key === sortCol) setSortDir(d => d === "desc" ? "asc" : "desc");
+    else { setSortCol(key); setSortDir("desc"); }
+  };
 
   const cExp = allTxs.filter(t => t.amt < 0 && t.cat !== "epa").length;
   const cInc = allTxs.filter(t => t.amt > 0).length;
@@ -724,9 +733,32 @@ function TxDefault({ onRowClick, onSelectMany }) {
   };
 
   const filtered = allTxs.filter(matchFilter);
-  const groups = getWeekGroups(filtered);
-  const sortedGroups = sortDir === "desc" ? groups : [...groups].reverse();
   const filteredTotal = filtered.length;
+
+  const sortedFiltered = [...filtered].sort((a, b) => {
+    let va, vb;
+    if (sortCol === "date") {
+      const pa = (a.d || "").split("/"), pb = (b.d || "").split("/");
+      va = pa.length >= 3 ? parseInt(pa[2])*10000 + parseInt(pa[1])*100 + parseInt(pa[0]) : 0;
+      vb = pb.length >= 3 ? parseInt(pb[2])*10000 + parseInt(pb[1])*100 + parseInt(pb[0]) : 0;
+    } else if (sortCol === "lbl") {
+      va = (a.lbl || "").toLowerCase(); vb = (b.lbl || "").toLowerCase();
+    } else if (sortCol === "amt") {
+      va = a.amt || 0; vb = b.amt || 0;
+    } else if (sortCol === "cat") {
+      va = (catDefs.find(c => c.id === a.cat)?.label || a.cat || "").toLowerCase();
+      vb = (catDefs.find(c => c.id === b.cat)?.label || b.cat || "").toLowerCase();
+    } else if (sortCol === "acc") {
+      va = (a.acc || "").toLowerCase(); vb = (b.acc || "").toLowerCase();
+    } else if (sortCol === "mode") {
+      va = (a.mode || "").toLowerCase(); vb = (b.mode || "").toLowerCase();
+    }
+    const cmp = typeof va === "string" ? va.localeCompare(vb) : (va - vb);
+    return sortDir === "desc" ? -cmp : cmp;
+  });
+
+  const useGroups = sortCol === "date";
+  const groups = useGroups ? getWeekGroups(sortedFiltered) : null;
 
   return (
     <main className="tx-main">
@@ -739,33 +771,42 @@ function TxDefault({ onRowClick, onSelectMany }) {
                    search={search} onSearch={setSearch}
                    catSel={catSel} onCatSelChange={setCatSel}
                    month={month} onMonthChange={setMonth}
-                   sortDir={sortDir} onSortDir={setSortDir}
                    monthsOpt={realMonths} catOpt={catDefs}/>
       <TxSummaryReal txs={filtered} month={month} allCount={allTxs.length}/>
 
       <div className="tx-table">
-        <TxTableHead />
+        <TxTableHead sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
         <div className="tx-tbody">
-          {sortedGroups.map((g, gi) => {
-            if (g.txs.length === 0) return null;
-            const groupSum = g.txs.reduce((s, t) => s + t.amt, 0);
-            return (
-              <div key={g.key}>
-                <div className="tx-group-h">
-                  <span>{g.label}</span>
-                  <span className="sum">{groupSum > 0 ? "+" : ""}{fmtEUR(groupSum, 2)}</span>
-                </div>
-                {g.txs.map((t, i) => (
-                  <TxRow key={gi + "-" + i} t={t} catDefs={catDefs} onClick={() => onRowClick(t)}
-                         onCheckboxClick={() => onSelectMany(allTxs.findIndex(tx => tx.id === t.id))}
-                         menuOpen={openMenuId === t.id}
-                         onMenuToggle={() => setOpenMenuId(openMenuId === t.id ? null : t.id)}
-                         onDelete={() => { setAllTxs(prev => prev.filter(tx => String(tx.id) !== String(t.id))); setOpenMenuId(null); }}
-                         onRecategorize={catId => { setAllTxs(prev => prev.map(tx => String(tx.id) === String(t.id) ? { ...tx, cat: catId } : tx)); setOpenMenuId(null); }}/>
-                ))}
-              </div>
-            );
-          })}
+          {useGroups
+            ? groups.map((g, gi) => {
+                if (g.txs.length === 0) return null;
+                const groupSum = g.txs.reduce((s, t) => s + t.amt, 0);
+                return (
+                  <div key={g.key}>
+                    <div className="tx-group-h">
+                      <span>{g.label}</span>
+                      <span className="sum">{groupSum > 0 ? "+" : ""}{fmtEUR(groupSum, 2)}</span>
+                    </div>
+                    {g.txs.map((t, i) => (
+                      <TxRow key={gi + "-" + i} t={t} catDefs={catDefs} onClick={() => onRowClick(t)}
+                             onCheckboxClick={() => onSelectMany(allTxs.findIndex(tx => tx.id === t.id))}
+                             menuOpen={openMenuId === t.id}
+                             onMenuToggle={() => setOpenMenuId(openMenuId === t.id ? null : t.id)}
+                             onDelete={() => { setAllTxs(prev => prev.filter(tx => String(tx.id) !== String(t.id))); setOpenMenuId(null); }}
+                             onRecategorize={catId => { setAllTxs(prev => prev.map(tx => String(tx.id) === String(t.id) ? { ...tx, cat: catId } : tx)); setOpenMenuId(null); }}/>
+                    ))}
+                  </div>
+                );
+              })
+            : sortedFiltered.map((t, i) => (
+                <TxRow key={t.id || i} t={t} catDefs={catDefs} onClick={() => onRowClick(t)}
+                       onCheckboxClick={() => onSelectMany(allTxs.findIndex(tx => tx.id === t.id))}
+                       menuOpen={openMenuId === t.id}
+                       onMenuToggle={() => setOpenMenuId(openMenuId === t.id ? null : t.id)}
+                       onDelete={() => { setAllTxs(prev => prev.filter(tx => String(tx.id) !== String(t.id))); setOpenMenuId(null); }}
+                       onRecategorize={catId => { setAllTxs(prev => prev.map(tx => String(tx.id) === String(t.id) ? { ...tx, cat: catId } : tx)); setOpenMenuId(null); }}/>
+              ))
+          }
           {filteredTotal === 0 && (
             <div style={{ padding: "40px 24px", textAlign: "center",
                           color: "var(--ink-500)", fontSize: 13,
@@ -1418,6 +1459,9 @@ const TX_STYLES = `
               font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
               color: var(--ink-500); position: sticky; top: 0; z-index: 1; }
   .tx-thead .sort { display: inline-flex; align-items: center; gap: 4px; color: var(--amber-500); }
+  .tx-thead .th-sort { cursor: pointer; user-select: none; transition: color 0.1s; }
+  .tx-thead .th-sort:hover { color: var(--ink-900); }
+  .tx-thead .th-sort.active { color: var(--amber-500); }
 
   .tx-group-h { padding: 10px 18px 6px; font-size: 10px; letter-spacing: 0.1em;
                 text-transform: uppercase; color: var(--ink-500);
