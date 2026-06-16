@@ -5,7 +5,7 @@
    4. bulk    — sélection multiple (bulk actions bar) */
 
 import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useTransactions, useCategories, useAutoRules, applyRules, reapplyRules, parseTxDate, txMonthKey, txMonths, monthKeyLabel, autoCat } from "../lib/store";
 import { fmtEUR } from "../lib/chartPrimitives";
 import {
@@ -65,6 +65,8 @@ function txCatStyle(cat, catDefs = []) {
    Composant principal — décide quelle variante afficher
    ───────────────────────────────────────────────────────────────── */
 export default function Transactions() {
+  const location = useLocation();
+  const [allTxs] = useTransactions();
   const [selectedTx, setSelectedTx] = useState(null);
   const [bulkMode, setBulkMode]     = useState(false);
   const bulkStartRef                = useRef(null);   // index pré-sélectionné à l'entrée
@@ -78,6 +80,16 @@ export default function Transactions() {
   };
   const closeBulk = () => setBulkMode(false);
 
+  // Réagit aux navigations depuis la palette de commandes
+  useEffect(() => {
+    const s = location.state;
+    if (!s) return;
+    if (s.selectedTxId) {
+      const tx = allTxs.find(t => String(t.id) === String(s.selectedTxId));
+      if (tx) openDetail(tx);
+    }
+  }, []); // eslint-disable-line — fires once on mount
+
   return (
     <>
       <style>{TX_STYLES}</style>
@@ -87,7 +99,7 @@ export default function Transactions() {
       ) : selectedTx ? (
         <TxDetail t={selectedTx} onClose={closeDetail}/>
       ) : (
-        <TxDefault onRowClick={openDetail} onSelectMany={openBulk}/>
+        <TxDefault onRowClick={openDetail} onSelectMany={openBulk} autoOpenAdd={!!location.state?.openAddForm}/>
       )}
     </>
   );
@@ -661,10 +673,11 @@ function TxTableHead({ sortCol = "date", sortDir = "desc", onSort }) {
    ───────────────────────────────────────────────────────────────── */
 const MONTH_NUM = { "Janvier":1,"Février":2,"Mars":3,"Avril":4,"Mai":5,"Juin":6,"Juillet":7,"Août":8,"Septembre":9,"Octobre":10,"Novembre":11,"Décembre":12 };
 
-function TxDefault({ onRowClick, onSelectMany }) {
+function TxDefault({ onRowClick, onSelectMany, autoOpenAdd }) {
   const [allTxs, setAllTxs] = useTransactions();
   const [catDefs] = useCategories();
   const [showAddModal, setShowAddModal] = useState(false);
+  useEffect(() => { if (autoOpenAdd) setShowAddModal(true); }, []); // eslint-disable-line
   const [openMenuId,  setOpenMenuId]   = useState(null);
 
   const handleAdd = tx => setAllTxs(prev => [tx, ...prev]);
