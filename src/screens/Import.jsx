@@ -302,9 +302,13 @@ export default function Import() {
       (async () => {
         try {
           let text = await readAs("UTF-8");
-          // Si le fichier n'est pas en UTF-8 (ex : ISO-8859-1 courant chez les banques
-          // françaises), on obtient des caractères de remplacement U+FFFD — on réessaie.
-          if (text.includes("�")) text = await readAs("ISO-8859-1");
+          // Si le fichier n'est pas en UTF-8 (ex : Windows-1252/ISO-8859-1 courants chez
+          // les banques françaises), on obtient des caractères de remplacement U+FFFD —
+          // on réessaie avec les encodages les plus probables jusqu'à ce que ça disparaisse.
+          for (const enc of ["windows-1252", "ISO-8859-1"]) {
+            if (!text.includes("�")) break;
+            text = await readAs(enc);
+          }
           const txs = parseCSV(text, autoRules);
           if (txs && txs.length > 0) {
             setParsedTxs(txs);
