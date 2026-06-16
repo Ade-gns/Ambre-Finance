@@ -246,7 +246,7 @@ export default function Onboarding() {
           <div style={{ flex: 1 }}>
             <div className="ob-alt-t">Pas de relevé sous la main ?</div>
             <div className="ob-alt-s">
-              Démarrez avec un jeu de données d'exemple — 3 mois fictifs, 95 transactions.
+              Démarrez avec un jeu de données d'exemple — 3 mois fictifs, 92 transactions.
             </div>
           </div>
           <span className="ob-alt-cta" onClick={loadSample}>Charger l'exemple →</span>
