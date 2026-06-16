@@ -5,7 +5,7 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useTransactions, useCategories, useAutoRules, applyRules, reapplyRules, computeCatTotals, DEFAULT_CATS } from "../lib/store";
+import { useTransactions, useCategories, useAutoRules, applyRules, reapplyRules, computeCatTotals, DEFAULT_CATS, txMonthKey, monthKeyLabel, monthKeyShort, txMonths, autoCat } from "../lib/store";
 import { fmtEUR, pathSmooth } from "../lib/chartPrimitives";
 import {
   IcSearch, IcCalendar, IcFilter, IcArrowR, IcChevDn,
@@ -25,7 +25,7 @@ const CAT_ICON_LIST = [
 export default function Categories() {
   const { state, pathname } = useLocation();
   const navigate = useNavigate();
-  const [transactions] = useTransactions();
+  const [transactions, setTransactions] = useTransactions();
   const [categories, setCategories] = useCategories();
   const [view, setView]                   = useState("manage"); // manage | detail | empty
   const [selectedCatId, setSelectedCatId] = useState(
@@ -38,14 +38,24 @@ export default function Categories() {
     navigate(pathname, { replace: true, state: null });
   }, []); // eslint-disable-line — fires once on mount
 
-  const catTotals = computeCatTotals(transactions, categories, null);
+  const now    = new Date();
+  const curKey = String(now.getMonth() + 1).padStart(2, "0") + "/" + now.getFullYear();
+  const catTotals = computeCatTotals(transactions, categories, curKey);
   const catTotalsMap = Object.fromEntries(catTotals.map(c => [c.id, c]));
+
+  // Somme réelle sur les 12 derniers mois où on a effectivement des données
+  const monthsAll  = [...new Set(transactions.map(t => txMonthKey(t.d)).filter(Boolean))].sort();
+  const last12Keys = new Set(monthsAll.slice(-12));
+  const txLast12    = transactions.filter(t => last12Keys.has(txMonthKey(t.d)));
+  const catTotals12 = computeCatTotals(txLast12, categories, null);
+  const catTotals12Map = Object.fromEntries(catTotals12.map(c => [c.id, c]));
 
   // Merge amounts into categories for display
   const catsWithAmounts = categories.map(c => ({
     ...c,
-    amount: catTotalsMap[c.id]?.amount || 0,
-    share:  catTotalsMap[c.id]?.share  || 0,
+    amount:   catTotalsMap[c.id]?.amount   || 0,
+    share:    catTotalsMap[c.id]?.share    || 0,
+    amount12: catTotals12Map[c.id]?.amount || 0,
   }));
 
   const selectedCat = catsWithAmounts.find(c => c.id === selectedCatId) ?? catsWithAmounts[0];
@@ -64,10 +74,13 @@ export default function Categories() {
           autoOpenRuleForm={openRuleForm}
         />
       )}
-      {view === "detail" && <CatDetail cat={selectedCat} transactions={transactions} onBack={() => setView("manage")} />}
+      {view === "detail" && <CatDetail cat={selectedCat} categories={catsWithAmounts} transactions={transactions} onBack={() => setView("manage")} />}
       {view === "empty"  && (
         <CatEmpty
           cat={selectedCat}
+          categories={catsWithAmounts}
+          transactions={transactions}
+          onAssign={txId => setTransactions(prev => prev.map(t => String(t.id) === String(txId) ? { ...t, cat: selectedCat.id } : t))}
           onBack={() => setView("manage")}
           onAddTransaction={() => navigate("/transactions", { state: { openAddForm: true } })}
           onCreateRule={() => { setOpenRuleForm(true); setView("manage"); }}
@@ -371,7 +384,7 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
               <div>
                 <div className="cm-card-t" style={{ fontSize: 15 }}>{selected.label}</div>
                 <div className="cm-card-s">
-                  {selected.amount > 0 ? `12 mois · ${fmtEUR(selected.amount * 12, 0)} cumulé` : "catégorie inactive"}
+                  {selected.amount > 0 ? `12 mois · ${fmtEUR(selected.amount12, 0)} cumulé` : "catégorie inactive"}
                 </div>
               </div>
             </div>
@@ -694,13 +707,21 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
 /* ─────────────────────────────────────────────────────────────────
    Vue 2 — Détail d'une catégorie (drill-down)
    ───────────────────────────────────────────────────────────────── */
-function CatDetail({ cat, transactions = [], onBack }) {
+const CD_MODE_COLORS = { CB: "#b8693d", Virement: "#6b7a4f", Prélèvement: "#a85a48", PRLV: "#a85a48", Espèces: "#7a5c3a", ESP: "#7a5c3a", CHQ: "#cd8459" };
+
+function CatDetail({ cat, categories = [], transactions = [], onBack }) {
   const navigate = useNavigate();
   const [period, setPeriod]           = useState("12 m");
-  const [catMonth, setCatMonth]       = useState("Mai 2026");
   const [catMonthOpen, setCatMonthOpen] = useState(false);
   const catMonthRef                   = useRef(null);
-  const MONTHS_OPT = ["Mai 2026","Avril 2026","Mars 2026","Février 2026","Janvier 2026","Décembre 2025","Novembre 2025","Octobre 2025"];
+
+  const now    = new Date();
+  const curKey = String(now.getMonth() + 1).padStart(2, "0") + "/" + now.getFullYear();
+  const realMonths = txMonths(transactions); // clés "MM/YYYY", plus récent en premier
+  const [catMonthSel, setCatMonthSel] = useState(null); // null = mois réel le plus récent
+  const catMonthKey = catMonthSel || realMonths[0] || curKey;
+  const MONTHS_OPT  = realMonths.length ? realMonths : [curKey];
+
   useEffect(() => {
     if (!catMonthOpen) return;
     const fn = e => { if (!catMonthRef.current?.contains(e.target)) setCatMonthOpen(false); };
@@ -708,29 +729,79 @@ function CatDetail({ cat, transactions = [], onBack }) {
     return () => document.removeEventListener("mousedown", fn);
   }, [catMonthOpen]);
 
-  const allMonths = ["Juin","Juil.","Août","Sept.","Oct.","Nov.","Déc.","Janv.","Févr.","Mars","Avril","Mai"];
-  const allSeries = [412, 488, 502, 470, 425, 460, 612, 478, 442, 466, 462, 487];
-  const months = period === "6 m" ? allMonths.slice(6) : period === "YTD" ? allMonths.slice(7) : allMonths;
-  const series = period === "6 m" ? allSeries.slice(6) : period === "YTD" ? allSeries.slice(7) : allSeries;
-
-  const subCats = [
-    { label: "Supermarchés",  amt: 312.40, share: 0.64, color: "#b8693d" },
-    { label: "Boulangerie",   amt:  44.20, share: 0.09, color: "#cd8459" },
-    { label: "Restaurants",   amt:  68.50, share: 0.14, color: "#a85a48" },
-    { label: "Marchés",       amt:  28.00, share: 0.06, color: "#7a5c3a" },
-    { label: "Livraison",     amt:  34.10, share: 0.07, color: "#d4a76a" },
-  ];
-
-  const merchants = [
-    { name: "Carrefour Market",   n: 6, sum: 184.20 },
-    { name: "Auchan Drive",       n: 2, sum: 164.80 },
-    { name: "Monoprix",           n: 4, sum:  81.95 },
-    { name: "Boulangerie Pichon", n: 5, sum:  41.80 },
-    { name: "Le Petit Café",      n: 3, sum:  14.20 },
-  ];
-
   const txInCat = transactions.filter(t => t.cat === cat.id);
-  const txDisplay = txInCat.slice(0, 8);
+
+  // Série mensuelle réelle de dépenses pour cette catégorie
+  const monthsAll = [...new Set(transactions.map(t => txMonthKey(t.d)).filter(Boolean))].sort();
+  const curYear = now.getFullYear();
+  const catMonthlyAll = monthsAll.map(key => ({
+    key, label: monthKeyShort(key),
+    amt: txInCat.filter(t => txMonthKey(t.d) === key && t.amt < 0).reduce((s, t) => s + Math.abs(t.amt), 0),
+  }));
+  const catMonthlyShown = period === "6 m" ? catMonthlyAll.slice(-6)
+    : period === "YTD" ? catMonthlyAll.filter(m => m.key.endsWith("/" + curYear))
+    : catMonthlyAll.slice(-12);
+  const months = catMonthlyShown.map(m => m.label);
+  const series = catMonthlyShown.map(m => m.amt);
+  const peakIdx = series.length ? series.indexOf(Math.max(...series)) : -1;
+
+  // KPIs réels pour le mois sélectionné
+  const txInCatMonth   = txInCat.filter(t => txMonthKey(t.d) === catMonthKey);
+  const totalThisMonth = txInCatMonth.filter(t => t.amt < 0).reduce((s, t) => s + Math.abs(t.amt), 0);
+
+  const [selMM, selYY] = catMonthKey.split("/").map(Number);
+  const prevD   = new Date(selYY, selMM - 2, 1);
+  const prevKey = String(prevD.getMonth() + 1).padStart(2, "0") + "/" + prevD.getFullYear();
+  const hasPrevData    = monthsAll.includes(prevKey);
+  const totalPrevMonth = txInCat.filter(t => txMonthKey(t.d) === prevKey && t.amt < 0).reduce((s, t) => s + Math.abs(t.amt), 0);
+  const deltaPct = hasPrevData && totalPrevMonth > 0
+    ? Math.round((totalThisMonth - totalPrevMonth) / totalPrevMonth * 100) : null;
+
+  const last12 = catMonthlyAll.slice(-12);
+  const avg12  = last12.length ? last12.reduce((s, m) => s + m.amt, 0) / last12.length : 0;
+  const daysInMonth = new Date(selYY, selMM, 0).getDate();
+  const perDay = totalThisMonth / daysInMonth;
+
+  const budgetPct = cat.budget ? Math.round(totalThisMonth / cat.budget * 100) : null;
+
+  // Classement parmi toutes les catégories pour le mois sélectionné
+  const catTotalsThisMonth = categories
+    .filter(c => c.id !== "inc")
+    .map(c => ({
+      id: c.id, label: c.label,
+      amt: transactions.filter(t => txMonthKey(t.d) === catMonthKey && t.cat === c.id && t.amt < 0)
+        .reduce((s, t) => s + Math.abs(t.amt), 0),
+    }))
+    .sort((a, b) => b.amt - a.amt);
+  const rankIdx = catTotalsThisMonth.findIndex(c => c.id === cat.id);
+  const rankLabel = totalThisMonth <= 0 ? "Aucune dépense ce mois"
+    : rankIdx === 0 ? "1er poste de dépense ce mois"
+    : rankIdx > 0 ? `${rankIdx + 1}e poste après ${catTotalsThisMonth[0].label}`
+    : null;
+
+  // Marchands principaux — regroupement réel par libellé
+  const merchantMap = new Map();
+  txInCat.filter(t => t.amt < 0).forEach(t => {
+    const key = t.lbl || "—";
+    if (!merchantMap.has(key)) merchantMap.set(key, { name: key, n: 0, sum: 0 });
+    const m = merchantMap.get(key);
+    m.n += 1; m.sum += Math.abs(t.amt);
+  });
+  const merchants = [...merchantMap.values()].sort((a, b) => b.sum - a.sum).slice(0, 5);
+  const recurringCount = [...merchantMap.values()].filter(m => m.n > 1).length;
+
+  // Répartition par mode de paiement — remplace les "sous-catégories" fictives
+  const modeMap = new Map();
+  txInCat.filter(t => t.amt < 0).forEach(t => {
+    const key = t.mode || "Autre";
+    modeMap.set(key, (modeMap.get(key) || 0) + Math.abs(t.amt));
+  });
+  const modeTotal = [...modeMap.values()].reduce((s, v) => s + v, 0);
+  const modeBreakdown = [...modeMap.entries()]
+    .map(([label, amt]) => ({ label, amt, share: modeTotal > 0 ? amt / modeTotal : 0, color: CD_MODE_COLORS[label] || "#9d8b73" }))
+    .sort((a, b) => b.amt - a.amt);
+
+  const txDisplay = txInCatMonth.slice(0, 8);
 
   return (
     <main className="cd-main">
@@ -753,7 +824,7 @@ function CatDetail({ cat, transactions = [], onBack }) {
         <div className="cd-tool">
           <div ref={catMonthRef} style={{ position: "relative" }}>
             <button className="cd-btn" onClick={() => setCatMonthOpen(o => !o)}>
-              <IcCalendar size={14}/>{catMonth} <IcChevDn size={12}/>
+              <IcCalendar size={14}/>{monthKeyLabel(catMonthKey)} <IcChevDn size={12}/>
             </button>
             {catMonthOpen && (
               <div style={{
@@ -765,11 +836,11 @@ function CatDetail({ cat, transactions = [], onBack }) {
                 {MONTHS_OPT.map(m => (
                   <button key={m} style={{
                     display: "block", width: "100%", padding: "9px 16px",
-                    background: m === catMonth ? "var(--amber-100)" : "none",
-                    color: m === catMonth ? "var(--amber-500)" : "var(--ink-800)",
+                    background: m === catMonthKey ? "var(--amber-100)" : "none",
+                    color: m === catMonthKey ? "var(--amber-500)" : "var(--ink-800)",
                     border: "none", borderBottom: "1px solid var(--line)",
                     cursor: "pointer", fontSize: 13, textAlign: "left",
-                  }} onClick={() => { setCatMonth(m); setCatMonthOpen(false); }}>{m}</button>
+                  }} onClick={() => { setCatMonthSel(m); setCatMonthOpen(false); }}>{monthKeyLabel(m)}</button>
                 ))}
               </div>
             )}
@@ -780,24 +851,28 @@ function CatDetail({ cat, transactions = [], onBack }) {
 
       <div className="cd-kpis">
         <div className="cd-card">
-          <div className="cd-card-l">Total ce mois</div>
-          <div className="cd-card-v">{fmtEUR(cat.amount || 487, 0)}</div>
-          <div className="cd-card-s cd-delta-up">↑ 5,4 % vs avril</div>
+          <div className="cd-card-l">Total {monthKeyLabel(catMonthKey)}</div>
+          <div className="cd-card-v">{fmtEUR(totalThisMonth, 0)}</div>
+          <div className={"cd-card-s" + (deltaPct != null ? (deltaPct >= 0 ? " cd-delta-up" : " cd-delta-down") : "")}>
+            {deltaPct != null
+              ? `${deltaPct >= 0 ? "↑" : "↓"} ${Math.abs(deltaPct)} % vs ${monthKeyShort(prevKey).toLowerCase()}`
+              : hasPrevData ? `vs ${monthKeyShort(prevKey).toLowerCase()} · —` : "pas de données le mois précédent"}
+          </div>
         </div>
         <div className="cd-card">
-          <div className="cd-card-l">Moyenne 12 mois</div>
-          <div className="cd-card-v">{fmtEUR(471, 0)}</div>
-          <div className="cd-card-s">soit ~16 €/jour</div>
+          <div className="cd-card-l">Moyenne {last12.length || 0} mois</div>
+          <div className="cd-card-v">{fmtEUR(avg12, 0)}</div>
+          <div className="cd-card-s">soit ~{fmtEUR(perDay, 0)}/jour ce mois</div>
         </div>
         <div className="cd-card">
           <div className="cd-card-l">Part du budget mensuel</div>
-          <div className="cd-card-v">28 %</div>
-          <div className="cd-card-s">2e poste après Logement</div>
+          <div className="cd-card-v">{budgetPct != null ? `${budgetPct} %` : "—"}</div>
+          <div className="cd-card-s">{budgetPct == null ? "Pas de budget défini · " : ""}{rankLabel}</div>
         </div>
         <div className="cd-card">
           <div className="cd-card-l">Transactions</div>
-          <div className="cd-card-v">14</div>
-          <div className="cd-card-s">↻ 6 récurrentes détectées</div>
+          <div className="cd-card-v">{txInCatMonth.length}</div>
+          <div className="cd-card-s">{recurringCount > 0 ? `↻ ${recurringCount} marchand${recurringCount > 1 ? "s" : ""} récurrent${recurringCount > 1 ? "s" : ""}` : "aucun récurrent détecté"}</div>
         </div>
       </div>
 
@@ -805,8 +880,10 @@ function CatDetail({ cat, transactions = [], onBack }) {
       <div className="cd-chart-card">
         <div className="cd-card-h">
           <div>
-            <div className="cd-card-t">Évolution sur 12 mois</div>
-            <div className="cd-card-ss">moyenne en pointillé · décembre = pic de saison</div>
+            <div className="cd-card-t">Évolution sur {months.length || 0} mois</div>
+            <div className="cd-card-ss">
+              moyenne en pointillé{peakIdx >= 0 && series[peakIdx] > 0 ? ` · ${months[peakIdx]} = pic sur la période` : ""}
+            </div>
           </div>
           <div style={{ display: "flex", gap: 4 }}>
             {["12 m", "6 m", "YTD"].map(p => (
@@ -827,12 +904,16 @@ function CatDetail({ cat, transactions = [], onBack }) {
         <div className="cd-card cd-bot-card">
           <div className="cd-card-h">
             <div>
-              <div className="cd-card-t">Sous-catégories</div>
-              <div className="cd-card-ss">détail interne de {cat.label}</div>
+              <div className="cd-card-t">Par mode de paiement</div>
+              <div className="cd-card-ss">{cat.label} · toutes les données</div>
             </div>
           </div>
           <div style={{ flex: 1, overflow: "hidden" }}>
-            {subCats.map(s => (
+            {modeBreakdown.length === 0 ? (
+              <div style={{ padding: "16px 0", textAlign: "center", color: "var(--ink-500)", fontSize: 12 }}>
+                Aucune dépense dans cette catégorie.
+              </div>
+            ) : modeBreakdown.map(s => (
               <div key={s.label} className="cd-bar-row">
                 <div className="cd-bar-meta">
                   <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -857,18 +938,22 @@ function CatDetail({ cat, transactions = [], onBack }) {
           <div className="cd-card-h">
             <div>
               <div className="cd-card-t">Marchands principaux</div>
-              <div className="cd-card-ss">top 5 sur 12 mois</div>
+              <div className="cd-card-ss">top 5 · toutes les données</div>
             </div>
           </div>
           <div style={{ flex: 1, overflow: "hidden" }}>
-            {merchants.map(m => (
+            {merchants.length === 0 ? (
+              <div style={{ padding: "16px 0", textAlign: "center", color: "var(--ink-500)", fontSize: 12 }}>
+                Aucune dépense dans cette catégorie.
+              </div>
+            ) : merchants.map(m => (
               <div key={m.name} className="cd-merch-row">
                 <div className="cd-merch-mark">{m.name[0].toLowerCase()}</div>
                 <div>
                   <div className="cd-merch-name">{m.name}</div>
-                  <div className="cd-merch-n">{m.n} transactions</div>
+                  <div className="cd-merch-n">{m.n} transaction{m.n > 1 ? "s" : ""}</div>
                 </div>
-                <span className="cd-merch-n">↻</span>
+                {m.n > 1 && <span className="cd-merch-n">↻</span>}
                 <span className="cd-merch-sum">{fmtEUR(m.sum, 0)}</span>
               </div>
             ))}
@@ -879,7 +964,7 @@ function CatDetail({ cat, transactions = [], onBack }) {
           <div className="cd-card-h">
             <div>
               <div className="cd-card-t">Transactions · {cat.label}</div>
-              <div className="cd-card-ss">{txDisplay.length} mouvements ce mois</div>
+              <div className="cd-card-ss">{txDisplay.length} mouvement{txDisplay.length > 1 ? "s" : ""} en {monthKeyShort(catMonthKey).toLowerCase()}</div>
             </div>
             <button className="cd-btn" style={{ padding: "4px 10px", fontSize: 11 }}
                     onClick={() => navigate("/transactions")}>
@@ -889,7 +974,7 @@ function CatDetail({ cat, transactions = [], onBack }) {
           <div style={{ flex: 1, overflow: "hidden" }}>
             {txDisplay.length === 0 ? (
               <div style={{ padding: "16px 0", textAlign: "center", color: "var(--ink-500)", fontSize: 12 }}>
-                Aucune transaction dans cette catégorie.
+                Aucune transaction dans cette catégorie ce mois-ci.
               </div>
             ) : txDisplay.map((t, i) => (
               <div key={i} className="cd-tx-row">
@@ -910,14 +995,16 @@ function CatDetail({ cat, transactions = [], onBack }) {
 
 /* Graphique d'évolution d'une catégorie sur 12 mois */
 function CategoryEvolutionChart({ months, values, color }) {
+  if (!months || months.length < 2) return null;
   const width = 1280, height = 160;
   const padX = 36, padR = 18, padY = 18, padB = 22;
   const innerW = width - padX - padR;
   const innerH = height - padY - padB;
   const min = Math.min(...values) * 0.9;
   const max = Math.max(...values) * 1.05;
+  const range = (max - min) || 1;
   const xs = months.map((_, i) => padX + (i * innerW) / (months.length - 1));
-  const yOf = v => padY + innerH - ((v - min) / (max - min)) * innerH;
+  const yOf = v => padY + innerH - ((v - min) / range) * innerH;
   const pts = xs.map((x, i) => [x, yOf(values[i])]);
   const line = pathSmooth(pts);
   const area = `${line} L ${xs[xs.length - 1]} ${padY + innerH} L ${xs[0]} ${padY + innerH} Z`;
@@ -966,11 +1053,15 @@ function CategoryEvolutionChart({ months, values, color }) {
 /* ─────────────────────────────────────────────────────────────────
    Vue 3 — Catégorie vide (créée mais sans transactions)
    ───────────────────────────────────────────────────────────────── */
-function CatEmpty({ cat, onBack, onAddTransaction, onCreateRule }) {
-  const [emptyMonth, setEmptyMonth]       = useState("Mai 2026");
+function CatEmpty({ cat, categories = [], transactions = [], onAssign, onBack, onAddTransaction, onCreateRule }) {
+  const now = new Date();
+  const curKey = String(now.getMonth() + 1).padStart(2, "0") + "/" + now.getFullYear();
+  const realMonths = txMonths(transactions);
+  const [emptyMonthSel, setEmptyMonthSel] = useState(null);
+  const emptyMonth = emptyMonthSel || realMonths[0] || curKey;
   const [emptyMonthOpen, setEmptyMonthOpen] = useState(false);
   const emptyMonthRef                     = useRef(null);
-  const MONTHS_OPT = ["Mai 2026","Avril 2026","Mars 2026","Février 2026","Janvier 2026","Décembre 2025","Novembre 2025","Octobre 2025"];
+  const MONTHS_OPT = realMonths.length ? realMonths : [curKey];
   useEffect(() => {
     if (!emptyMonthOpen) return;
     const fn = e => { if (!emptyMonthRef.current?.contains(e.target)) setEmptyMonthOpen(false); };
@@ -978,11 +1069,11 @@ function CatEmpty({ cat, onBack, onAddTransaction, onCreateRule }) {
     return () => document.removeEventListener("mousedown", fn);
   }, [emptyMonthOpen]);
 
-  const suggestions = [
-    { d: "11/05", lbl: "Udemy.com — Subscription", sub: "PAIEMENT PAR CARTE",  cur: "abo", amt: -16.99 },
-    { d: "04/05", lbl: "Fnac.com",                 sub: "Livre · Sapiens",     cur: "loi", amt: -22.50 },
-    { d: "28/04", lbl: "Coursera Plus",            sub: "ABONNEMENT MENSUEL",  cur: "abo", amt: -49.00 },
-  ];
+  // Suggestions réelles : transactions mal classées que le classement automatique
+  // rattacherait à cette catégorie (au lieu d'exemples fictifs type "Udemy.com").
+  const suggestions = transactions
+    .filter(t => t.cat !== cat.id && autoCat(t.lbl, t.amt) === cat.id)
+    .slice(0, 3);
 
   return (
     <main className="ce-main">
@@ -1016,7 +1107,7 @@ function CatEmpty({ cat, onBack, onAddTransaction, onCreateRule }) {
         <div style={{ display: "flex", gap: 8 }}>
           <div ref={emptyMonthRef} style={{ position: "relative" }}>
             <button className="ce-btn" onClick={() => setEmptyMonthOpen(o => !o)}>
-              <IcCalendar size={14}/>{emptyMonth} <IcChevDn size={12}/>
+              <IcCalendar size={14}/>{monthKeyLabel(emptyMonth)} <IcChevDn size={12}/>
             </button>
             {emptyMonthOpen && (
               <div style={{
@@ -1032,7 +1123,7 @@ function CatEmpty({ cat, onBack, onAddTransaction, onCreateRule }) {
                     color: m === emptyMonth ? "var(--amber-500)" : "var(--ink-800)",
                     border: "none", borderBottom: "1px solid var(--line)",
                     cursor: "pointer", fontSize: 13, textAlign: "left",
-                  }} onClick={() => { setEmptyMonth(m); setEmptyMonthOpen(false); }}>{m}</button>
+                  }} onClick={() => { setEmptyMonthSel(m); setEmptyMonthOpen(false); }}>{monthKeyLabel(m)}</button>
                 ))}
               </div>
             )}
@@ -1103,32 +1194,39 @@ function CatEmpty({ cat, onBack, onAddTransaction, onCreateRule }) {
           <div className="ce-card-h">
             <div>
               <div className="ce-card-t">Suggestions à partir de vos transactions</div>
-              <div className="ce-card-s">3 mouvements récents qui pourraient appartenir à {cat.label}</div>
+              <div className="ce-card-s">
+                {suggestions.length > 0
+                  ? `${suggestions.length} mouvement${suggestions.length > 1 ? "s" : ""} qui pourrai${suggestions.length > 1 ? "ent" : "t"} appartenir à ${cat.label}`
+                  : `Aucune transaction existante ne semble correspondre à ${cat.label}`}
+              </div>
             </div>
-            <button className="ce-btn" style={{ padding: "4px 10px", fontSize: 11 }}>Ignorer</button>
           </div>
 
           <div style={{ overflow: "hidden", flex: 1 }}>
-            {suggestions.map((s, i) => (
-              <div key={i} className="ce-sg-row">
-                <span className="ce-sg-date">{s.d}</span>
-                <div>
-                  <div className="ce-sg-lbl">{s.lbl}</div>
-                  <div className="ce-sg-sub">{s.sub}</div>
+            {suggestions.map(s => {
+              const curCat = categories.find(c => c.id === s.cat);
+              return (
+                <div key={s.id} className="ce-sg-row">
+                  <span className="ce-sg-date">{s.d?.slice(0, 5) || s.d}</span>
+                  <div>
+                    <div className="ce-sg-lbl">{s.lbl}</div>
+                    <div className="ce-sg-sub">{s.sub}</div>
+                  </div>
+                  <span className="ce-sg-cur">
+                    {curCat && <span className="amb-dot" style={{ background: curCat.color }}/>}
+                    {curCat?.label || "Non classée"}
+                  </span>
+                  <div className="ce-sg-act">
+                    <button className="primary"
+                            style={{ padding: "4px 8px", fontSize: 10.5,
+                                    borderRadius: 8, border: "none", cursor: "pointer" }}
+                            onClick={() => onAssign?.(s.id)}>
+                      → {cat.label}
+                    </button>
+                  </div>
                 </div>
-                <span className="ce-sg-cur">
-                  <span className="amb-dot" style={{ background: s.cur === "abo" ? "#cd8459" : "#a85a48" }}/>
-                  {s.cur === "abo" ? "Abonnements" : "Loisirs"}
-                </span>
-                <div className="ce-sg-act">
-                  <button className="primary"
-                          style={{ padding: "4px 8px", fontSize: 10.5,
-                                  borderRadius: 8, border: "none", cursor: "pointer" }}>
-                    → {cat.label}
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="ce-rule-tip">
@@ -1302,6 +1400,7 @@ const CAT_STYLES = `
                color: var(--ink-900); line-height: 1.1; margin-top: 4px; }
   .cd-card-s { font-size: 11px; color: var(--ink-500); }
   .cd-delta-up { color: var(--rose-500); }
+  .cd-delta-down { color: var(--sage-500); }
 
   .cd-chart-card { background: var(--cream-50); border: 1px solid var(--line);
                    border-radius: 14px; padding: 18px 20px;
