@@ -4,7 +4,7 @@
    3. empty  — catégorie créée mais sans transactions (avec suggestions) */
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useTransactions, useCategories, useAutoRules, applyRules, reapplyRules, computeCatTotals, DEFAULT_CATS } from "../lib/store";
 import { fmtEUR, pathSmooth } from "../lib/chartPrimitives";
 import {
@@ -23,10 +23,19 @@ const CAT_ICON_LIST = [
 ];
 
 export default function Categories() {
+  const { state } = useLocation();
+  const navigate = useNavigate();
   const [transactions] = useTransactions();
   const [categories, setCategories] = useCategories();
   const [view, setView]                   = useState("manage"); // manage | detail | empty
-  const [selectedCatId, setSelectedCatId] = useState(() => categories[0]?.id || "alim");
+  const [selectedCatId, setSelectedCatId] = useState(
+    () => state?.selectedCatId || categories[0]?.id || "alim"
+  );
+
+  useEffect(() => {
+    if (!state) return;
+    navigate("/categories", { replace: true, state: null });
+  }, []); // eslint-disable-line — fires once on mount
 
   const catTotals = computeCatTotals(transactions, categories, null);
   const catTotalsMap = Object.fromEntries(catTotals.map(c => [c.id, c]));
@@ -50,6 +59,7 @@ export default function Categories() {
           onSeeEmpty={() => setView("empty")}
           catsWithAmounts={catsWithAmounts}
           setCategories={setCategories}
+          autoOpenCreate={!!state?.openCreateForm}
         />
       )}
       {view === "detail" && <CatDetail cat={selectedCat} transactions={transactions} onBack={() => setView("manage")} />}
@@ -77,9 +87,10 @@ function exportCatsCSV(cats) {
 /* ─────────────────────────────────────────────────────────────────
    Vue 1 — Gestion des catégories (liste + édition + règles)
    ───────────────────────────────────────────────────────────────── */
-function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWithAmounts = [], setCategories }) {
+function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWithAmounts = [], setCategories, autoOpenCreate }) {
   const [deletedIds, setDeletedIds] = useState(new Set());
   const [newOpen, setNewOpen]     = useState(false);
+  useEffect(() => { if (autoOpenCreate) setNewOpen(true); }, []); // eslint-disable-line
   const [newName, setNewName]     = useState("");
   const [newColor, setNewColor]   = useState("#b8693d");
   const [ioOpen, setIoOpen]       = useState(false);
