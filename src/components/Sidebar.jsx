@@ -3,7 +3,7 @@
 // Utilise React Router pour la navigation.
 
 import { useState, useEffect } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { load, save } from "../lib/storage";
 import {
   IcHome, IcImport, IcList, IcTag, IcChart, IcBell, IcSettings, IcSun, IcMoon, IcLock
@@ -28,6 +28,7 @@ const BASE_NAV = [
 ];
 
 export default function Sidebar() {
+  const navigate = useNavigate();
   const [theme, setTheme] = useState(() => load("stg.theme", "clair"));
   const [unread, setUnread] = useState(() => {
     const a = load("alerts", []);
@@ -56,6 +57,13 @@ export default function Sidebar() {
 
   const isDark = theme === "sombre" ||
     (theme === "auto" && typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+  function lockNow() {
+    const phrase = load("stg.lockPhrase", "");
+    if (!phrase) { navigate("/settings"); return; }
+    save("app.locked", true);
+    window.dispatchEvent(new CustomEvent("ambre:storage", { detail: { key: "app.locked", value: true } }));
+  }
 
   return (
     <aside className="atc-side">
@@ -137,7 +145,7 @@ export default function Sidebar() {
         >
           {isDark ? <IcMoon size={18}/> : <IcSun size={18}/>}
         </button>
-        <button className="atc-nav-btn" title="Verrouiller"><IcLock size={16}/></button>
+        <button className="atc-nav-btn" title="Verrouiller" onClick={lockNow}><IcLock size={16}/></button>
       </div>
     </aside>
   );

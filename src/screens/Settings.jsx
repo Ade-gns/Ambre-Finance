@@ -85,6 +85,8 @@ function SettingsGeneral() {
   const [dateFmt, setDateFmt]           = useLocalStorage("stg.dateFmt", 0);
   const [premierJour, setPremierJour]   = useLocalStorage("stg.premierJour", 0);
   const [verrouiller, setVerrouiller]   = useLocalStorage("stg.verrouiller", false);
+  const [lockPhrase, setLockPhrase]     = useLocalStorage("stg.lockPhrase", "");
+  const [firstName, setFirstName]       = useLocalStorage("stg.firstName", "Camille");
   const [lancer, setLancer]             = useLocalStorage("stg.lancer", false);
   const [saved, setSaved]               = useState(false);
   const [lang, setLang]                 = useLocalStorage("stg.lang", "fr");
@@ -134,7 +136,7 @@ function SettingsGeneral() {
               <div className="stg-row-sub">Affiché dans la salutation du tableau de bord.</div>
             </div>
             <div className="stg-row-ctrl">
-              <input className="stg-input" defaultValue="Camille"/>
+              <input className="stg-input" value={firstName} onChange={e => setFirstName(e.target.value)}/>
             </div>
           </div>
           <div className="stg-row">
@@ -267,6 +269,19 @@ function SettingsGeneral() {
               <span className={"stg-tg" + (verrouiller ? "" : " off")} onClick={() => setVerrouiller(v => !v)}/>
             </div>
           </div>
+          {verrouiller && (
+            <div className="stg-row">
+              <div>
+                <div className="stg-row-lbl">Phrase secrète</div>
+                <div className="stg-row-sub">Requise pour déverrouiller — y compris via le bouton de la sidebar.</div>
+              </div>
+              <div className="stg-row-ctrl">
+                <input type="password" className="stg-input" value={lockPhrase}
+                       placeholder="Définir une phrase…"
+                       onChange={e => setLockPhrase(e.target.value)}/>
+              </div>
+            </div>
+          )}
           <div className="stg-row">
             <div>
               <div className="stg-row-lbl">Lancer Ambre au démarrage du système</div>
@@ -435,7 +450,9 @@ function SettingsAccounts() {
               Ajoutez un parseur pour un format de relevé non reconnu — un fichier de configuration JSON suffit.
             </div>
           </div>
-          <button className="stg-btn"><IcImport size={13}/>Importer un parseur</button>
+          <button className="stg-btn" disabled title="Bientôt disponible" style={{ opacity: 0.5, cursor: "not-allowed" }}>
+            <IcImport size={13}/>Importer un parseur
+          </button>
         </div>
         <div style={{
           padding: "12px 14px", background: "var(--cream-100)", borderRadius: 8,
@@ -646,7 +663,9 @@ function SettingsAlerts() {
         breadcrumb="Alertes"
         title='Mes <em>alertes</em>.'
         actions={<>
-          <button className="stg-btn"><IcImport size={14}/>Importer un modèle</button>
+          <button className="stg-btn" disabled title="Bientôt disponible" style={{ opacity: 0.5, cursor: "not-allowed" }}>
+            <IcImport size={14}/>Importer un modèle
+          </button>
           <button className="stg-btn amber" onClick={() => { setShowForm(v => !v); setEditAlertId(null); }}>
             <IcPlus size={14}/>{showForm ? "Annuler" : "Nouvelle alerte"}
           </button>

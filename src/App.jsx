@@ -12,6 +12,7 @@ import Settings from "./screens/Settings";
 import Alerts from "./screens/Alerts";
 import Onboarding from "./screens/Onboarding";
 import CommandPalette from "./components/CommandPalette";
+import LockScreen from "./components/LockScreen";
 
 /* Évalue les alertes à chaque changement de transactions et les persiste */
 function AlertEngine() {
@@ -102,12 +103,20 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const openPalette = useCallback(() => setPaletteOpen(true), []);
 
+  const [locked, setLocked] = useLocalStorage("app.locked", false);
+  const [verrouiller] = useLocalStorage("stg.verrouiller", false);
+  const [lockPhrase]  = useLocalStorage("stg.lockPhrase", "");
+  useEffect(() => {
+    if (verrouiller && lockPhrase) setLocked(true);
+  }, []); // eslint-disable-line — verrouille au démarrage si configuré
+
   return (
     <HashRouter>
       <ThemeWatcher />
       <AlertEngine />
       <PaletteListener onOpen={openPalette} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      {locked && <LockScreen phrase={lockPhrase} onUnlock={() => setLocked(false)} />}
       <Routes>
         {/* Route plein écran — pas de sidebar */}
         <Route path="/onboarding" element={<OnboardingRoute />} />

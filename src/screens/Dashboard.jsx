@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [categories]   = useCategories();
   const [pickerOpen, setPickerOpen]   = useState(false);
   const [chartPeriod, setChartPeriod] = useLocalStorage("dash.chartPeriod", "12 m");
+  const [firstName] = useLocalStorage("stg.firstName", "Camille");
   const pickerRef = useRef(null);
 
   useEffect(() => {
@@ -313,6 +314,7 @@ export default function Dashboard() {
       <div className="atc-top">
         <div>
           <div className="atc-bread">Ambre · <strong>Tableau de bord</strong> · {activeLabel}</div>
+          <div style={{ fontSize: 13, color: "var(--ink-500)", margin: "4px 0 0" }}>Bonjour, {firstName}.</div>
           <h1 style={{
             fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 400,
             margin: "4px 0 0", color: "var(--ink-900)", letterSpacing: "-0.01em"
