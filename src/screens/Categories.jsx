@@ -23,7 +23,7 @@ const CAT_ICON_LIST = [
 ];
 
 export default function Categories() {
-  const { state } = useLocation();
+  const { state, pathname } = useLocation();
   const navigate = useNavigate();
   const [transactions] = useTransactions();
   const [categories, setCategories] = useCategories();
@@ -34,7 +34,7 @@ export default function Categories() {
 
   useEffect(() => {
     if (!state) return;
-    navigate("/categories", { replace: true, state: null });
+    navigate(pathname, { replace: true, state: null });
   }, []); // eslint-disable-line — fires once on mount
 
   const catTotals = computeCatTotals(transactions, categories, null);
