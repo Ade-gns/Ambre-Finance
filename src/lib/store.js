@@ -64,9 +64,18 @@ export function txDow(d) {
   return date ? DOW_FR[date.getDay()] : "";
 }
 
+let _txIdSeq = 0;
+function nextTxId() {
+  // Évite Date.now() + Math.random() : au-delà de ~10^12 ms, un double ne peut
+  // plus représenter les décimales de Math.random(), ce qui provoque des
+  // collisions d'id quand de nombreuses lignes sont normalisées dans la même
+  // milliseconde (import CSV en lot).
+  return Date.now() * 1000 + (_txIdSeq++ % 1000);
+}
+
 export function normalizeTransaction(t, accountName = "Principal") {
   return {
-    id:   t.id   || (Date.now() + Math.random()),
+    id:   t.id   || nextTxId(),
     d:    t.d,
     dow:  txDow(t.d),
     lbl:  (t.lbl || "—").trim(),

@@ -8,6 +8,7 @@ export async function initDB() {
   if (!isTauri) {
     _warmCacheFromLocalStorage();
     _cleanSampleIfNeeded();
+    _dedupeTransactionIds();
     return;
   }
 
@@ -25,6 +26,31 @@ export async function initDB() {
   }
 
   await _cleanSampleIfNeededAsync();
+  _dedupeTransactionIds();
+}
+
+/* Répare les transactions dont l'id a collisionné (bug historique de
+ * Date.now() + Math.random() perdant sa précision décimale) en réassignant
+ * un id unique à toutes les occurrences sauf la première de chaque doublon. */
+function _dedupeTransactionIds() {
+  const txs = cache.get("transactions");
+  if (!Array.isArray(txs)) return;
+  const seen = new Set();
+  let bump = 0;
+  let changed = false;
+  const fixed = txs.map(t => {
+    if (!t) return t;
+    if (seen.has(t.id)) {
+      changed = true;
+      return { ...t, id: Date.now() + (++bump) };
+    }
+    seen.add(t.id);
+    return t;
+  });
+  if (changed) {
+    cache.set("transactions", fixed);
+    dbSet("transactions", fixed);
+  }
 }
 
 export function dbGet(key, defaultValue) {
