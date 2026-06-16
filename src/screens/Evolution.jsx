@@ -38,11 +38,11 @@ export default function Evolution() {
                      : period === "YTD" ? monthly.filter(m => m.key && parseInt(m.key.split("/")[1], 10) === curYear)
                      : monthly.slice(-12); // 12m ou cmp
 
-  // Année précédente estimée (offset de ~12 mois dans les données si disponible)
-  const previousYear = monthsToShow.map((m, i) => {
-    const pastIdx = monthly.indexOf(m) - 12;
-    return pastIdx >= 0 ? monthly[pastIdx] : { ...m, exp: m.exp * 0.92 };
-  });
+  // Année précédente (offset de 12 mois) — uniquement si on a de vraies données pour chaque mois affiché
+  const hasPrevYear = monthsToShow.every(m => monthly.indexOf(m) - 12 >= 0);
+  const previousYear = hasPrevYear
+    ? monthsToShow.map(m => monthly[monthly.indexOf(m) - 12])
+    : null;
 
   // Séries par catégorie sur les mois affichés
   const catSeries = categories
@@ -138,7 +138,9 @@ export default function Evolution() {
           <div className="ev-legend">
             <span><span style={{ width: 14, height: 2, background: "var(--amber-500)" }}/>Dépenses</span>
             <span><span style={{ width: 14, height: 2, background: "var(--sage-500)" }}/>Revenus</span>
-            <span><span style={{ width: 14, height: 0, borderTop: "1.5px dashed var(--ink-500)" }}/>Année précédente</span>
+            {hasPrevYear && (
+              <span><span style={{ width: 14, height: 0, borderTop: "1.5px dashed var(--ink-500)" }}/>Année précédente</span>
+            )}
           </div>
         </div>
         <EvolutionHeroChart months={monthsToShow} prev={previousYear}/>
@@ -249,14 +251,14 @@ function EvolutionHeroChart({ months, prev }) {
   const padX = 44, padY = 18, padR = 18, padB = 26;
   const innerW = width - padX - padR;
   const innerH = height - padY - padB;
-  const allVals = months.flatMap(m => [m.exp, m.inc]).concat(prev.map(p => p.exp));
+  const allVals = months.flatMap(m => [m.exp, m.inc]).concat(prev ? prev.map(p => p.exp) : []);
   const min = Math.min(...allVals) * 0.85;
   const max = Math.max(...allVals) * 1.05;
   const xs = months.map((_, i) => padX + (i * innerW) / (months.length - 1));
   const yOf = v => padY + innerH - ((v - min) / (max - min)) * innerH;
   const expPts = xs.map((x, i) => [x, yOf(months[i].exp)]);
   const incPts = xs.map((x, i) => [x, yOf(months[i].inc)]);
-  const prevPts = xs.map((x, i) => [x, yOf(prev[i].exp)]);
+  const prevPts = prev ? xs.map((x, i) => [x, yOf(prev[i].exp)]) : null;
 
   return (
     <svg width="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none"
@@ -282,9 +284,11 @@ function EvolutionHeroChart({ months, prev }) {
         );
       })}
 
-      {/* Année précédente (pointillé) */}
-      <path d={pathSmooth(prevPts)} fill="none" stroke="var(--ink-500)" strokeWidth="1.2"
-            strokeDasharray="3 4" opacity="0.7"/>
+      {/* Année précédente (pointillé) — uniquement si on dispose de vraies données */}
+      {prevPts && (
+        <path d={pathSmooth(prevPts)} fill="none" stroke="var(--ink-500)" strokeWidth="1.2"
+              strokeDasharray="3 4" opacity="0.7"/>
+      )}
 
       {/* Aire dépenses */}
       <path d={`${pathSmooth(expPts)} L ${xs[xs.length-1]} ${padY + innerH} L ${xs[0]} ${padY + innerH} Z`}
