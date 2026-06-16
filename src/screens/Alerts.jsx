@@ -8,6 +8,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLocalStorage } from "../lib/storage";
+import { useCategories } from "../lib/store";
 import {
   IcBell, IcSettings, IcFilter, IcCalendar, IcChevDn
 } from "../lib/icons";
@@ -60,6 +61,7 @@ function AlertKindIcon({ kind }) {
 
 export default function Alerts() {
   const [alerts, setAlerts] = useLocalStorage("alerts", []);
+  const [categories] = useCategories();
   const [filter, setFilter] = useState("all");
   const navigate = useNavigate();
   const [catOpen, setCatOpen] = useState(false);
@@ -97,6 +99,19 @@ export default function Alerts() {
   };
   const archive = (id) => {
     setAlerts(alerts.map(a => a.id === id ? { ...a, state: "archived" } : a));
+  };
+  const unarchive = (id) => {
+    setAlerts(alerts.map(a => a.id === id ? { ...a, state: "read" } : a));
+  };
+  const goToCta = (a) => {
+    if (a.kind === "threshold") {
+      const cat = categories.find(c => c.label === a.cat.label);
+      navigate("/categories", cat ? { state: { selectedCatId: cat.id } } : undefined);
+    } else if ((a.kind === "anomaly" || a.kind === "duplicate") && a.txId != null) {
+      navigate("/transactions", { state: { selectedTxId: a.txId } });
+    } else {
+      navigate("/transactions");
+    }
   };
   const markAllRead = () => {
     setAlerts(alerts.map(a => a.state === "unread" ? { ...a, state: "read" } : a));
@@ -292,7 +307,7 @@ export default function Alerts() {
                         {a.cat.label} · {a.source}
                       </div>
                     </div>
-                    <button className="ah-cta">{a.cta} →</button>
+                    <button className="ah-cta" onClick={() => goToCta(a)}>{a.cta} →</button>
                     {a.state !== "archived" ? (
                       <>
                         <button className="ah-iconbtn"
@@ -318,7 +333,7 @@ export default function Alerts() {
                       <>
                         <button className="ah-iconbtn"
                                 title="Désarchiver"
-                                onClick={() => markAsRead(a.id)}>
+                                onClick={() => unarchive(a.id)}>
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M3 7l9-4 9 4"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/>

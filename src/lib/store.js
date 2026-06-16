@@ -186,7 +186,7 @@ export function computeAlertNotifs(transactions, categories, alertDefs) {
       .slice(0, 5)
       .forEach(t => {
         const cat = catMap[t.cat] || { label: "Autre", color: "#9d8b73" };
-        notifs.push({ id: `large_${t.id}`, kind: "anomaly",
+        notifs.push({ id: `large_${t.id}`, kind: "anomaly", txId: t.id,
           name: "Transaction inhabituelle",
           msg: `${t.lbl} — ${fmtShort(Math.abs(t.amt))}. Vérifiez que c'est attendu.`,
           cat: { label: cat.label, color: cat.color }, source: t.lbl,
@@ -205,7 +205,7 @@ export function computeAlertNotifs(transactions, categories, alertDefs) {
         if (d1 && d2 && Math.abs(d1 - d2) <= 48 * 3600 * 1000 && String(t.id) !== String(prev.id)) {
           const ids = [String(t.id), String(prev.id)].sort();
           const cat = catMap[t.cat] || { label: "Autre", color: "#9d8b73" };
-          notifs.push({ id: `dup_${ids[0]}_${ids[1]}`, kind: "duplicate",
+          notifs.push({ id: `dup_${ids[0]}_${ids[1]}`, kind: "duplicate", txId: t.id,
             name: "Doublon potentiel",
             msg: `${fmtShort(Math.abs(t.amt))} le ${t.d?.slice(0, 5) || "?"} et le ${prev.d?.slice(0, 5) || "?"}.`,
             cat: { label: cat.label, color: cat.color }, source: t.lbl,
