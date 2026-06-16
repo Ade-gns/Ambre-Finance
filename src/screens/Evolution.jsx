@@ -4,7 +4,7 @@
    - Small multiples : un sparkline par catégorie */
 
 import { useState, useRef, useEffect } from "react";
-import { useTransactions, useCategories, computeMonthly, computeCatTotals } from "../lib/store";
+import { useTransactions, useCategories, computeMonthly, computeCatTotals, monthKeyLabel } from "../lib/store";
 import { fmtEUR, pathSmooth, Sparkline } from "../lib/chartPrimitives";
 import { IcCalendar, IcChevDn } from "../lib/icons";
 
@@ -146,46 +146,39 @@ export default function Evolution() {
         <EvolutionHeroChart months={monthsToShow} prev={previousYear}/>
       </div>
 
-      {/* BOTTOM — comparison + small multiples */}
+      {/* BOTTOM — détail mensuel + small multiples */}
       <div className="ev-bot">
-        {/* Comparison table */}
+        {/* Détail mensuel (vrais chiffres) */}
         <div className="ev-card">
           <div className="ev-hero-head">
             <div>
-              <div className="ev-card-t">Mai 2026 vs Mai 2025</div>
-              <div className="ev-card-s">comparaison d'une année à l'autre</div>
+              <div className="ev-card-t">Détail par mois</div>
+              <div className="ev-card-s">dépenses, revenus et solde réels</div>
             </div>
             <span className="amb-chip" style={{
-              color: "var(--sage-500)",
-              background: "rgba(107,122,79,0.08)",
-              borderColor: "rgba(107,122,79,0.35)"
+              color: totalNet >= 0 ? "var(--sage-500)" : "var(--rose-500)",
+              background: totalNet >= 0 ? "rgba(107,122,79,0.08)" : "rgba(184,93,93,0.08)",
+              borderColor: totalNet >= 0 ? "rgba(107,122,79,0.35)" : "rgba(184,93,93,0.35)"
             }}>
-              Globalement −3 %
+              Moy. {fmtEUR(totalNet / monthsToShow.length, 0)}/mois
             </span>
           </div>
           <div className="ev-cmp-row head">
-            <span>Catégorie</span>
-            <span style={{ textAlign: "right" }}>2025</span>
-            <span style={{ textAlign: "right" }}>2026</span>
-            <span style={{ textAlign: "right" }}>Δ</span>
+            <span>Mois</span>
+            <span style={{ textAlign: "right" }}>Dépenses</span>
+            <span style={{ textAlign: "right" }}>Revenus</span>
+            <span style={{ textAlign: "right" }}>Solde</span>
           </div>
           <div style={{ overflow: "auto" }}>
-            {catSeries.map(c => {
-              const cur  = c.values[c.values.length - 1] ?? 0;
-              const last = cur * (0.88 + (c.id.charCodeAt(0) % 7) * 0.04);
-              const delta = last > 0 ? (cur - last) / last : 0;
+            {[...monthsToShow].reverse().map(m => {
+              const net = m.inc - m.exp;
               return (
-                <div key={c.id} className="ev-cmp-row">
-                  <span className="ev-cmp-l">
-                    <span className="amb-dot" style={{ background: c.color }}/>
-                    {c.label}
-                  </span>
-                  <span className="ev-cmp-v">{fmtEUR(last, 0)}</span>
-                  <span className="ev-cmp-v">{fmtEUR(cur, 0)}</span>
-                  <span className={"ev-cmp-d " + (Math.abs(delta) < 0.01 ? "flat" : delta > 0 ? "up" : "down")}>
-                    {Math.abs(delta) < 0.01
-                      ? "—"
-                      : `${delta > 0 ? "+" : ""}${(delta * 100).toFixed(0)} %`}
+                <div key={m.key} className="ev-cmp-row">
+                  <span className="ev-cmp-l">{monthKeyLabel(m.key)}</span>
+                  <span className="ev-cmp-v">{fmtEUR(m.exp, 0)}</span>
+                  <span className="ev-cmp-v">{fmtEUR(m.inc, 0)}</span>
+                  <span className={"ev-cmp-d " + (Math.abs(net) < 0.5 ? "flat" : net > 0 ? "down" : "up")}>
+                    {net > 0 ? "+" : ""}{fmtEUR(net, 0)}
                   </span>
                 </div>
               );
