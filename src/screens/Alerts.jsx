@@ -8,7 +8,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLocalStorage } from "../lib/storage";
-import { useCategories } from "../lib/store";
+import { useCategories, useAlertDefs, monthKeyLabel, monthKeyShort } from "../lib/store";
 import {
   IcBell, IcSettings, IcFilter, IcCalendar, IcChevDn
 } from "../lib/icons";
@@ -62,6 +62,7 @@ function AlertKindIcon({ kind }) {
 export default function Alerts() {
   const [alerts, setAlerts] = useLocalStorage("alerts", []);
   const [categories] = useCategories();
+  const [alertDefs] = useAlertDefs();
   const [filter, setFilter] = useState("all");
   const navigate = useNavigate();
   const [catOpen, setCatOpen] = useState(false);
@@ -83,16 +84,11 @@ export default function Alerts() {
     return () => document.removeEventListener("mousedown", fn);
   }, [monthOpen]);
   const CAT_LIST = [
-    { label: "Toutes",       color: null },
-    { label: "Alimentation", color: "#b8693d" },
-    { label: "Loisirs",      color: "#a85a48" },
-    { label: "Abonnements",  color: "#cd8459" },
-    { label: "Revenus",      color: "#6b7a4f" },
-    { label: "Santé",        color: "#9d8b73" },
-    { label: "Logement",     color: "#3d2817" },
-    { label: "Transports",   color: "#7a8c5c" },
+    { label: "Toutes", color: null },
+    ...categories.map(c => ({ label: c.label, color: c.color })),
   ];
-  const MONTH_LIST = [null, "Mai 2026","Avril 2026","Mars 2026","Février 2026","Janvier 2026","Décembre 2025"];
+  const monthsWithAlerts = [...new Set(alerts.map(a => a.month).filter(Boolean))].reverse();
+  const MONTH_LIST = [null, ...monthsWithAlerts];
 
   const markAsRead = (id) => {
     setAlerts(alerts.map(a => a.id === id ? { ...a, state: "read" } : a));
@@ -135,6 +131,18 @@ export default function Alerts() {
     thisweek: alerts.filter(a => a.thisWeek && a.state !== "archived").length,
     archived: alerts.filter(a => a.state === "archived").length,
   }), [alerts]);
+
+  const monthStats = useMemo(() => {
+    const now = new Date();
+    const curKey  = String(now.getMonth() + 1).padStart(2, "0") + "/" + now.getFullYear();
+    const prevD   = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevKey = String(prevD.getMonth() + 1).padStart(2, "0") + "/" + prevD.getFullYear();
+    const curLabel  = monthKeyLabel(curKey);
+    const prevLabel = monthKeyShort(prevKey).toLowerCase();
+    const curCount  = alerts.filter(a => a.month === curLabel).length;
+    const prevCount = alerts.filter(a => a.month === monthKeyLabel(prevKey)).length;
+    return { curCount, prevCount, prevLabel, delta: curCount - prevCount };
+  }, [alerts]);
 
   const mostAlerted = useMemo(() => {
     const c = {};
@@ -190,8 +198,11 @@ export default function Alerts() {
         </div>
         <div className="ah-stat">
           <div className="ah-stat-l">Déclenchées ce mois</div>
-          <div className="ah-stat-v">{alerts.length}</div>
-          <div className="ah-stat-s">↑ 4 vs avril</div>
+          <div className="ah-stat-v">{monthStats.curCount}</div>
+          <div className="ah-stat-s">
+            {monthStats.delta === 0 ? "= " : monthStats.delta > 0 ? "↑ " : "↓ "}
+            {Math.abs(monthStats.delta)} vs {monthStats.prevLabel}
+          </div>
         </div>
         <div className="ah-stat">
           <div className="ah-stat-l">Catégorie la + alertée</div>
@@ -202,8 +213,12 @@ export default function Alerts() {
         </div>
         <div className="ah-stat">
           <div className="ah-stat-l">Alertes actives</div>
-          <div className="ah-stat-v">5</div>
-          <div className="ah-stat-s">+ 4 modèles disponibles</div>
+          <div className="ah-stat-v">{alertDefs.filter(a => a.on).length}</div>
+          <div className="ah-stat-s">
+            {alertDefs.filter(a => !a.on).length > 0
+              ? `+ ${alertDefs.filter(a => !a.on).length} désactivée${alertDefs.filter(a => !a.on).length > 1 ? "s" : ""}`
+              : "toutes activées"}
+          </div>
         </div>
       </div>
 
