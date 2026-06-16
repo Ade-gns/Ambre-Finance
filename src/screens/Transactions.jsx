@@ -803,7 +803,7 @@ function TxDefault({ onRowClick, onSelectMany, autoOpenAdd }) {
                       <span className="sum">{groupSum > 0 ? "+" : ""}{fmtEUR(groupSum, 2)}</span>
                     </div>
                     {g.txs.map((t, i) => (
-                      <TxRow key={gi + "-" + i} t={t} catDefs={catDefs} onClick={() => onRowClick(t)}
+                      <TxRow key={t.id} t={t} catDefs={catDefs} onClick={() => onRowClick(t)}
                              onCheckboxClick={() => onSelectMany(allTxs.findIndex(tx => tx.id === t.id))}
                              menuOpen={openMenuId === t.id}
                              onMenuToggle={() => setOpenMenuId(openMenuId === t.id ? null : t.id)}
@@ -880,7 +880,7 @@ function TxDetailList({ tSel, catDefs }) {
                   <span className="sum">{groupSum > 0 ? "+" : ""}{fmtEUR(groupSum, 2)}</span>
                 </div>
                 {g.txs.slice(0, gi === 0 ? 5 : 6).map((t, i) => (
-                  <TxRow key={gi + "-" + i} t={t} catDefs={catDefs}
+                  <TxRow key={t.id} t={t} catDefs={catDefs}
                          selected={tSel === t} dense={gi > 0}/>
                 ))}
               </div>
@@ -1394,7 +1394,7 @@ function TxBulk({ onClose, startIdx }) {
                   </span>
                 </div>
                 {groupWithIdx.map(({ t, idx }, i) => (
-                  <TxRow key={gi + "-" + i} t={t} catDefs={catDefs}
+                  <TxRow key={t.id} t={t} catDefs={catDefs}
                          bulk={selected.includes(idx)} onClick={() => toggle(idx)}/>
                 ))}
               </div>
