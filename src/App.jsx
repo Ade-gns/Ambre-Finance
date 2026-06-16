@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { load, useLocalStorage } from "./lib/storage";
 import { useTransactions, useCategories, useAlertDefs, computeAlertNotifs, mergeAlertNotifs } from "./lib/store";
@@ -100,12 +100,13 @@ function PaletteListener({ onOpen }) {
 
 export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const openPalette = useCallback(() => setPaletteOpen(true), []);
 
   return (
     <HashRouter>
       <ThemeWatcher />
       <AlertEngine />
-      <PaletteListener onOpen={() => setPaletteOpen(true)} />
+      <PaletteListener onOpen={openPalette} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <Routes>
         {/* Route plein écran — pas de sidebar */}
