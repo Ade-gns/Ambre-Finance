@@ -11,6 +11,7 @@ import Evolution from "./screens/Evolution";
 import Settings from "./screens/Settings";
 import Alerts from "./screens/Alerts";
 import Onboarding from "./screens/Onboarding";
+import CommandPalette from "./components/CommandPalette";
 
 /* Évalue les alertes à chaque changement de transactions et les persiste */
 function AlertEngine() {
@@ -86,11 +87,26 @@ function OnboardingRoute() {
   return <Onboarding />;
 }
 
+function PaletteListener({ onOpen }) {
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.ctrlKey && e.key === "p") { e.preventDefault(); onOpen(); }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onOpen]);
+  return null;
+}
+
 export default function App() {
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
   return (
     <HashRouter>
       <ThemeWatcher />
       <AlertEngine />
+      <PaletteListener onOpen={() => setPaletteOpen(true)} />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <Routes>
         {/* Route plein écran — pas de sidebar */}
         <Route path="/onboarding" element={<OnboardingRoute />} />
