@@ -125,7 +125,7 @@ L'installeur est généré dans `src-tauri/target/release/bundle/`.
 Au premier démarrage, l'écran **Onboarding** s'affiche. Deux options :
 
 - **Importer un relevé CSV** — glisser-déposer ou sélectionner un fichier `.csv` exporté depuis votre banque.
-- **Charger l'exemple** — charge 95 transactions fictives (fév.–mai 2026) pour explorer l'interface. Ces données sont automatiquement effacées au prochain redémarrage.
+- **Charger l'exemple** — charge 92 transactions fictives (fév.–mai 2026) pour explorer l'interface. Ces données sont automatiquement effacées au prochain redémarrage.
 
 ---
 
@@ -155,6 +155,24 @@ src/
 
 src-tauri/                  # Code Rust / config Tauri
 ```
+
+---
+
+## Changelog
+
+### 2026-06-17 — Données fabriquées remplacées par de vraies données
+Plusieurs écrans affichaient des chiffres statiques ou calculés avec des formules arbitraires au lieu des vraies données de l'utilisateur. Corrigé sur :
+- **Transactions** : les `id` générés via `Date.now() + Math.random()` pouvaient entrer en collision (perte de précision flottante au-delà de 10¹² ms), ce qui empêchait de sélectionner plusieurs transactions et pouvait faire recatégoriser/supprimer la mauvaise ligne. Nouveau générateur d'id sans collision + migration automatique des données existantes.
+- **Évolution** : le tableau de comparaison annuelle utilisait une formule inventée pour les chiffres de l'année précédente ; remplacé par un détail mois par mois avec dépenses/revenus/solde réels.
+- **Alertes** : "déclenchées ce mois", le delta vs mois précédent, "alertes actives" et la liste de catégories du filtre étaient en dur ; tout est maintenant calculé depuis les vraies alertes et règles configurées.
+- **Paramètres** : la liste de comptes (4 comptes fictifs au démarrage) est remplacée par une détection automatique depuis les transactions réelles (solde, dernier mouvement, nombre de transactions) ; les statistiques de sauvegarde (taille, date, intégrité) reflètent l'état réel au lieu de valeurs figées.
+- **Catégories** : la fiche détail d'une catégorie (graphique 12 mois, total, % de budget, classement, marchands principaux) était presque entièrement fictive ; tout est recalculé depuis les vraies transactions. La carte "Sous-catégories" (qui ne correspond à aucun concept du modèle de données) est remplacée par une répartition réelle par mode de paiement. Les "suggestions" de transactions à classer (état vide d'une catégorie) proposent désormais de vraies transactions mal classées, avec un bouton de réaffectation fonctionnel.
+
+### 2026-06-16 — Palette de commandes, tri, import et corrections diverses
+- Ajout de la palette de commandes (`Ctrl+P`) avec recherche et navigation contextuelle.
+- Tri par colonne sur l'écran Transactions (date, libellé, montant, catégorie, compte, mode).
+- Import CSV : fallback d'encodage Windows-1252 / ISO-8859-1 pour les relevés bancaires français.
+- Corrections : clé React instable sur les lignes de transactions, année précédente fabriquée sur le graphique d'évolution, CTA des alertes non cliquables, bouton "Désarchiver", actions de l'état vide d'une catégorie, écran de verrouillage et prénom personnalisable dans les Paramètres.
 
 ---
 
