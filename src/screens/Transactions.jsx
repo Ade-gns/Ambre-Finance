@@ -65,6 +65,7 @@ function txCatStyle(cat, catDefs = []) {
    Composant principal — décide quelle variante afficher
    ───────────────────────────────────────────────────────────────── */
 export default function Transactions() {
+  const navigate = useNavigate();
   const location = useLocation();
   const [allTxs] = useTransactions();
   const [selectedTx, setSelectedTx] = useState(null);
@@ -88,6 +89,7 @@ export default function Transactions() {
       const tx = allTxs.find(t => String(t.id) === String(s.selectedTxId));
       if (tx) openDetail(tx);
     }
+    navigate(location.pathname, { replace: true, state: null });
   }, []); // eslint-disable-line — fires once on mount
 
   return (
