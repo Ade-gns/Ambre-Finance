@@ -50,6 +50,7 @@ export default function CommandPalette({ open, onClose }) {
   useEffect(() => {
     if (!open) return;
     const handler = (e) => {
+      if (e.key === "Escape")   { e.preventDefault(); onClose(); }
       if (e.key === "ArrowDown") { e.preventDefault(); setSelectedIndex(i => Math.min(i + 1, rows.length - 1)); }
       if (e.key === "ArrowUp")   { e.preventDefault(); setSelectedIndex(i => Math.max(i - 1, 0)); }
       if (e.key === "Enter")     { e.preventDefault(); execute(rows[selectedIndex]); }
@@ -88,16 +89,18 @@ export default function CommandPalette({ open, onClose }) {
       return;
     }
     if (id === "export") {
-      const header = "Date,Libellé,Compte,Catégorie,Mode,Montant";
+      const header = "Date,Libellé,Sous-titre,Compte,Catégorie,Mode,Montant";
       const csvRows = transactions.map(t =>
-        [t.d, `"${t.lbl}"`, t.acc, t.cat, t.mode, t.amt].join(",")
+        [t.d, `"${t.lbl}"`, `"${t.sub || ""}"`, t.acc, t.cat, t.mode, t.amt].join(",")
       );
-      const blob = new Blob([header + "\n" + csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement("a");
-      a.href = url; a.download = "ambre-export.csv"; a.style.display = "none";
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const csv = header + "\n" + csvRows.join("\n");
+      const a = document.createElement("a");
+      a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(csv);
+      a.download = "ambre-export.csv";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
       onClose();
     }
   };
