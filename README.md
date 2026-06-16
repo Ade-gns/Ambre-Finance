@@ -118,6 +118,16 @@ npm run tauri -- build
 
 L'installeur est généré dans `src-tauri/target/release/bundle/`.
 
+#### Build Windows (.msi / .exe) sans machine Windows
+
+Compiler un binaire Windows depuis Linux/macOS n'est pas fiable pour une appli Tauri (WebView2, installeurs WiX/NSIS). Le workflow GitHub Actions [`build-windows.yml`](.github/workflows/build-windows.yml) compile sur un runner Windows officiel et produit les installeurs en artefact téléchargeable :
+
+1. Aller dans l'onglet **Actions** du dépôt GitHub.
+2. Sélectionner **Build Windows executable** → **Run workflow**.
+3. Une fois le run terminé (~5–10 min), télécharger l'artefact `ambre-windows` (contient le `.msi` et le `.exe` NSIS).
+
+Le workflow se déclenche aussi automatiquement sur un tag `v*` (ex. `git tag v0.1.0 && git push --tags`).
+
 ---
 
 ## Premier lancement
