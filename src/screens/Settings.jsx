@@ -8,7 +8,7 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useLocalStorage } from "../lib/storage";
-import { useTransactions, useCategories, useImportHistory, useAutoRules, useAlertDefs, DEFAULT_CATS, txMonthKey } from "../lib/store";
+import { useTransactions, useCategories, useImportHistory, useAutoRules, useAlertDefs, DEFAULT_CATS, txMonthKey, parseTxDate, computeAlertNotifs } from "../lib/store";
 import { fmtEUR } from "../lib/chartPrimitives";
 import {
   IcSettings, IcWallet, IcTag, IcBell, IcLock, IcSun, IcDot,
@@ -17,12 +17,16 @@ import {
 
 export default function Settings() {
   const [activeId, setActiveId] = useState("gen");
+  const [transactions] = useTransactions();
+  const [categories]   = useCategories();
+  const [alertDefs]    = useAlertDefs();
+  const liveAlertCount = computeAlertNotifs(transactions, categories, alertDefs).length;
 
   const subNav = [
     { id: "gen", label: "Général",              ico: IcSettings },
     { id: "acc", label: "Comptes & banques",    ico: IcWallet },
     { id: "cat", label: "Catégories & règles",  ico: IcTag },
-    { id: "alt", label: "Alertes",              ico: IcBell, badge: 2 },
+    { id: "alt", label: "Alertes",              ico: IcBell, badge: liveAlertCount || null },
     { id: "bck", label: "Sauvegarde & données", ico: IcLock },
     { id: "app", label: "Apparence",            ico: IcSun },
     { id: "abt", label: "À propos",             ico: IcDot },
@@ -298,15 +302,37 @@ function SettingsGeneral() {
 }
 
 /* ─────────── 2. Comptes & banques ─────────── */
+const ACC_MONTHS_FR = ["","janv.","févr.","mars","avril","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
+
 function SettingsAccounts() {
   const FILTERS = ["Tous", "Courant", "Épargne", "Investissement"];
   const [filter, setFilter]           = useState("Tous");
-  const [accounts, setAccounts]       = useState([
-    { id: 1, name: "Compte courant", bank: "BNP Paribas",       type: "Courant",        color: "#b8693d", bal: 3284.40,  last: "12 mai",   tx: 142, parser: "PDF + CSV", on: true },
-    { id: 2, name: "Livret A",       bank: "La Banque Postale", type: "Épargne",        color: "#6b7a4f", bal: 8120.00,  last: "08 avril", tx: 24,  parser: "CSV",        on: true },
-    { id: 3, name: "PEA",            bank: "Boursorama",        type: "Investissement", color: "#3d2817", bal: 12450.78, last: "01 mars",  tx: 18,  parser: "OFX",        on: true },
-    { id: 4, name: "Carte Revolut",  bank: "Revolut",           type: "E-money",        color: "#9d8b73", bal: 142.30,   last: "30 avril", tx: 31,  parser: "CSV",        on: false },
-  ]);
+  const [transactions]                = useTransactions();
+  const [accounts, setAccounts]       = useLocalStorage("accounts", null);
+  const ACC_COLORS = ["#b8693d","#cd8459","#6b7a4f","#3d2817","#9d8b73","#a85a48"];
+
+  // Découvre les comptes réels à partir des transactions importées (champ t.acc)
+  // au lieu de pré-remplir avec des comptes fictifs.
+  useEffect(() => {
+    if (accounts !== null) return;
+    const names = [...new Set(transactions.map(t => t.acc).filter(Boolean))];
+    setAccounts(names.map((name, i) => ({
+      id: Date.now() + i, name, bank: "", type: "Courant",
+      color: ACC_COLORS[i % ACC_COLORS.length], parser: "CSV", on: true,
+    })));
+  }, [accounts, transactions]); // eslint-disable-line
+
+  const accountsList = (accounts || []).map(a => {
+    const txs = transactions.filter(t => t.acc === a.name);
+    const bal = txs.reduce((s, t) => s + t.amt, 0);
+    const lastDate = txs.reduce((latest, t) => {
+      const d = parseTxDate(t.d);
+      return d && (!latest || d > latest) ? d : latest;
+    }, null);
+    const last = lastDate ? `${String(lastDate.getDate()).padStart(2, "0")} ${ACC_MONTHS_FR[lastDate.getMonth() + 1]}` : "—";
+    return { ...a, bal, tx: txs.length, last };
+  });
+
   const [editId, setEditId]           = useState(null);
   const [draft, setDraft]             = useState({});
   const [deleteId, setDeleteId]       = useState(null);
@@ -315,28 +341,27 @@ function SettingsAccounts() {
   const [newAccBank, setNewAccBank]   = useState("");
   const [newAccType, setNewAccType]   = useState("Courant");
   const [newAccColor, setNewAccColor] = useState("#b8693d");
-  const ACC_COLORS = ["#b8693d","#cd8459","#6b7a4f","#3d2817","#9d8b73","#a85a48"];
   const createAccount = () => {
     if (!newAccName.trim() || !newAccBank.trim()) return;
-    setAccounts(prev => [...prev, {
+    setAccounts(prev => [...(prev || []), {
       id: Date.now(), name: newAccName.trim(), bank: newAccBank.trim(),
-      type: newAccType, color: newAccColor, bal: 0, last: "—", tx: 0, parser: "CSV", on: true,
+      type: newAccType, color: newAccColor, parser: "CSV", on: true,
     }]);
     setNewAccName(""); setNewAccBank(""); setNewAccType("Courant"); setNewAccColor("#b8693d");
     setShowAddAccount(false);
   };
 
-  const toggleAccount = id => setAccounts(prev => prev.map(a => a.id === id ? { ...a, on: !a.on } : a));
+  const toggleAccount = id => setAccounts(prev => (prev || []).map(a => a.id === id ? { ...a, on: !a.on } : a));
 
   const startEdit = a => { setEditId(a.id); setDraft({ name: a.name, bank: a.bank }); setDeleteId(null); };
-  const saveEdit  = id => { setAccounts(prev => prev.map(a => a.id === id ? { ...a, ...draft } : a)); setEditId(null); };
+  const saveEdit  = id => { setAccounts(prev => (prev || []).map(a => a.id === id ? { ...a, ...draft } : a)); setEditId(null); };
 
   const confirmDelete = id => {
-    if (deleteId === id) { setAccounts(prev => prev.filter(a => a.id !== id)); setDeleteId(null); }
+    if (deleteId === id) { setAccounts(prev => (prev || []).filter(a => a.id !== id)); setDeleteId(null); }
     else { setDeleteId(id); setEditId(null); setTimeout(() => setDeleteId(d => d === id ? null : d), 3000); }
   };
 
-  const visible = filter === "Tous" ? accounts : accounts.filter(a => a.type === filter);
+  const visible = filter === "Tous" ? accountsList : accountsList.filter(a => a.type === filter);
 
   return (
     <>
@@ -349,7 +374,7 @@ function SettingsAccounts() {
       <div className="stg-card">
         <div className="stg-card-h">
           <div>
-            <div className="stg-card-t">{accounts.length} comptes enregistrés</div>
+            <div className="stg-card-t">{accountsList.length} comptes enregistrés</div>
             <div className="stg-card-s">
               Ambre stocke uniquement les informations nécessaires à la lecture de vos relevés.
               Aucune connexion bancaire n'est établie.
@@ -369,7 +394,7 @@ function SettingsAccounts() {
                   <div style={{ width: 40, height: 40, borderRadius: 10, background: a.color, flexShrink: 0,
                                 display: "flex", alignItems: "center", justifyContent: "center",
                                 color: "var(--cream-50)", fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 18 }}>
-                    {a.bank[0].toLowerCase()}
+                    {(a.bank || a.name)[0].toLowerCase()}
                   </div>
                   <input className="stg-input" value={draft.name} style={{ flex: 1 }}
                          onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}/>
@@ -399,10 +424,10 @@ function SettingsAccounts() {
                     color: "var(--cream-50)",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 18
-                  }}>{a.bank[0].toLowerCase()}</div>
+                  }}>{(a.bank || a.name)[0].toLowerCase()}</div>
                   <div>
                     <div style={{ fontSize: 13.5, color: "var(--ink-900)", fontWeight: 500 }}>{a.name}</div>
-                    <div style={{ fontSize: 11.5, color: "var(--ink-500)", marginTop: 2 }}>{a.bank} · {a.type}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--ink-500)", marginTop: 2 }}>{a.bank ? `${a.bank} · ${a.type}` : a.type}</div>
                   </div>
                   <div>
                     <div style={{ fontFamily: "var(--font-display)", fontSize: 20, color: "var(--ink-900)" }}>
@@ -413,7 +438,7 @@ function SettingsAccounts() {
                     </div>
                   </div>
                   <span style={{ fontSize: 11, color: "var(--ink-500)", fontFamily: "var(--font-mono)" }}>
-                    Dernier import · <br/><strong style={{ color: "var(--ink-800)" }}>{a.last}</strong>
+                    Dernier mouvement · <br/><strong style={{ color: "var(--ink-800)" }}>{a.last}</strong>
                   </span>
                   <span style={{
                     fontSize: 10.5, padding: "3px 8px", borderRadius: 999,
@@ -866,9 +891,15 @@ function SettingsBackup() {
   const [dbPath, setDbPath]           = useState("ambre.db");
   const [backupFolder, setBackupFolder] = useState("~/Documents/Ambre-backups/");
   const [restoreMsg, setRestoreMsg]   = useState(null);
+  const [lastBackupAt, setLastBackupAt] = useLocalStorage("stg.lastBackupAt", null);
   const dbFileRef                     = useRef(null);
   const backupFolderRef               = useRef(null);
   const restoreRef                    = useRef(null);
+
+  const dbSizeBytes = JSON.stringify({ transactions, categories, autoRules }).length;
+  const dbSizeLabel = dbSizeBytes < 1024 * 1024
+    ? `${Math.round(dbSizeBytes / 1024)} ko`
+    : `${(dbSizeBytes / (1024 * 1024)).toFixed(1)} Mo`;
 
   const checkIntegrity = () => {
     setIntegrity("checking");
@@ -877,7 +908,21 @@ function SettingsBackup() {
 
   const launchBackup = () => {
     setBackupRun("running");
-    setTimeout(() => { setBackupRun("done"); setTimeout(() => setBackupRun("idle"), 2500); }, 1800);
+    setTimeout(() => {
+      setBackupRun("done");
+      setLastBackupAt(new Date().toISOString());
+      setTimeout(() => setBackupRun("idle"), 2500);
+    }, 1800);
+  };
+
+  const backupAgoLabel = () => {
+    if (!lastBackupAt) return { big: "Jamais", small: "aucune sauvegarde effectuée" };
+    const d = new Date(lastBackupAt);
+    const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+    const big = days <= 0 ? "aujourd'hui" : days === 1 ? "il y a 1 j" : `il y a ${days} j`;
+    const small = d.toLocaleDateString("fr-FR", { day: "2-digit", month: "long" }) + " · "
+      + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    return { big, small };
   };
 
   const dlText = (content, filename, mime = "text/plain") => {
@@ -957,10 +1002,10 @@ function SettingsBackup() {
               Taille
             </div>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 24, color: "var(--ink-900)", marginTop: 4 }}>
-              4,8 Mo
+              {dbSizeLabel}
             </div>
             <div style={{ fontSize: 11, color: "var(--ink-500)", fontFamily: "var(--font-mono)" }}>
-              · 6 412 transactions
+              · {transactions.length} transaction{transactions.length > 1 ? "s" : ""}
             </div>
           </div>
           <div style={{ padding: "12px 14px", background: "var(--cream-100)",
@@ -969,22 +1014,29 @@ function SettingsBackup() {
               Dernière sauvegarde
             </div>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 24, color: "var(--ink-900)", marginTop: 4 }}>
-              il y a 2 j
+              {backupAgoLabel().big}
             </div>
             <div style={{ fontSize: 11, color: "var(--ink-500)", fontFamily: "var(--font-mono)" }}>
-              12 mai · 22h04
+              {backupAgoLabel().small}
             </div>
           </div>
-          <div style={{ padding: "12px 14px", background: "rgba(107,122,79,0.10)",
-                        borderRadius: 10, border: "1px solid rgba(107,122,79,0.25)" }}>
-            <div style={{ fontSize: 10, color: "var(--sage-500)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          <div style={{
+            padding: "12px 14px",
+            background: integrity === "ok" ? "rgba(107,122,79,0.10)" : "var(--cream-100)",
+            borderRadius: 10,
+            border: integrity === "ok" ? "1px solid rgba(107,122,79,0.25)" : "1px solid var(--line)",
+          }}>
+            <div style={{ fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase",
+                          color: integrity === "ok" ? "var(--sage-500)" : "var(--ink-500)" }}>
               Intégrité
             </div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 24, color: "var(--sage-500)", marginTop: 4 }}>
-              ✓ OK
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 24, marginTop: 4,
+                          color: integrity === "ok" ? "var(--sage-500)" : "var(--ink-900)" }}>
+              {integrity === "checking" ? "…" : integrity === "ok" ? "✓ OK" : "Non vérifiée"}
             </div>
-            <div style={{ fontSize: 11, color: "var(--sage-500)", fontFamily: "var(--font-mono)" }}>
-              checksum vérifié
+            <div style={{ fontSize: 11, fontFamily: "var(--font-mono)",
+                          color: integrity === "ok" ? "var(--sage-500)" : "var(--ink-500)" }}>
+              {integrity === "checking" ? "vérification en cours…" : integrity === "ok" ? "checksum vérifié" : "cliquez sur « Vérifier l'intégrité »"}
             </div>
           </div>
         </div>
