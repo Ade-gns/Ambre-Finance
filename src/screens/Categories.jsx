@@ -31,6 +31,7 @@ export default function Categories() {
   const [selectedCatId, setSelectedCatId] = useState(
     () => state?.selectedCatId || categories[0]?.id || "alim"
   );
+  const [openRuleForm, setOpenRuleForm]   = useState(false);
 
   useEffect(() => {
     if (!state) return;
@@ -60,10 +61,18 @@ export default function Categories() {
           catsWithAmounts={catsWithAmounts}
           setCategories={setCategories}
           autoOpenCreate={!!state?.openCreateForm}
+          autoOpenRuleForm={openRuleForm}
         />
       )}
       {view === "detail" && <CatDetail cat={selectedCat} transactions={transactions} onBack={() => setView("manage")} />}
-      {view === "empty"  && <CatEmpty  cat={selectedCat} onBack={() => setView("manage")} />}
+      {view === "empty"  && (
+        <CatEmpty
+          cat={selectedCat}
+          onBack={() => setView("manage")}
+          onAddTransaction={() => navigate("/transactions", { state: { openAddForm: true } })}
+          onCreateRule={() => { setOpenRuleForm(true); setView("manage"); }}
+        />
+      )}
     </>
   );
 }
@@ -87,7 +96,7 @@ function exportCatsCSV(cats) {
 /* ─────────────────────────────────────────────────────────────────
    Vue 1 — Gestion des catégories (liste + édition + règles)
    ───────────────────────────────────────────────────────────────── */
-function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWithAmounts = [], setCategories, autoOpenCreate }) {
+function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWithAmounts = [], setCategories, autoOpenCreate, autoOpenRuleForm }) {
   const [deletedIds, setDeletedIds] = useState(new Set());
   const [newOpen, setNewOpen]     = useState(false);
   useEffect(() => { if (autoOpenCreate) setNewOpen(true); }, []); // eslint-disable-line
@@ -112,6 +121,7 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
   const [editRuleId, setEditRuleId]     = useState(null);
   const [editDraft, setEditDraft]       = useState({});
   const [ruleFormOpen, setRuleFormOpen] = useState(false);
+  useEffect(() => { if (autoOpenRuleForm) setRuleFormOpen(true); }, []); // eslint-disable-line
   const [newWhen, setNewWhen]           = useState("libellé contient");
   const [newOp, setNewOp]               = useState("");
 
@@ -956,7 +966,7 @@ function CategoryEvolutionChart({ months, values, color }) {
 /* ─────────────────────────────────────────────────────────────────
    Vue 3 — Catégorie vide (créée mais sans transactions)
    ───────────────────────────────────────────────────────────────── */
-function CatEmpty({ cat, onBack }) {
+function CatEmpty({ cat, onBack, onAddTransaction, onCreateRule }) {
   const [emptyMonth, setEmptyMonth]       = useState("Mai 2026");
   const [emptyMonthOpen, setEmptyMonthOpen] = useState(false);
   const emptyMonthRef                     = useRef(null);
@@ -1075,10 +1085,10 @@ function CatEmpty({ cat, onBack }) {
             de classement automatique pour les prochains relevés ?
           </div>
           <div className="ce-empty-actions">
-            <button className="primary">
+            <button className="primary" onClick={onAddTransaction}>
               <IcPlus size={14} style={{ marginRight: 6 }}/>Ajouter une transaction
             </button>
-            <button className="ce-btn" style={{ padding: "9px 16px", fontSize: 13 }}>
+            <button className="ce-btn" style={{ padding: "9px 16px", fontSize: 13 }} onClick={onCreateRule}>
               <IcTag size={14}/>Créer une règle automatique
             </button>
           </div>
