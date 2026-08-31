@@ -90,7 +90,7 @@ export default function Transactions() {
       if (tx) openDetail(tx);
     }
     navigate(location.pathname, { replace: true, state: null });
-  }, []); // eslint-disable-line — fires once on mount
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- fires once on mount
 
   return (
     <>
@@ -679,7 +679,7 @@ function TxDefault({ onRowClick, onSelectMany, autoOpenAdd }) {
   const [allTxs, setAllTxs] = useTransactions();
   const [catDefs] = useCategories();
   const [showAddModal, setShowAddModal] = useState(false);
-  useEffect(() => { if (autoOpenAdd) setShowAddModal(true); }, []); // eslint-disable-line
+  useEffect(() => { if (autoOpenAdd) setShowAddModal(true); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- fires once on mount
   const [openMenuId,  setOpenMenuId]   = useState(null);
 
   const handleAdd = tx => setAllTxs(prev => [tx, ...prev]);

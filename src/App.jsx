@@ -26,7 +26,7 @@ function AlertEngine() {
     const computed = computeAlertNotifs(transactions, categories, alertDefs);
     if (!computed.length) return;
     setAlerts(prev => mergeAlertNotifs(prev, computed));
-  }, [transactions, categories, alertDefs]); // eslint-disable-line
+  }, [transactions, categories, alertDefs, setAlerts]);
 
   return null;
 }
@@ -108,7 +108,9 @@ export default function App() {
   const [lockPhrase]  = useLocalStorage("stg.lockPhrase", "");
   useEffect(() => {
     if (verrouiller && lockPhrase) setLocked(true);
-  }, []); // eslint-disable-line — verrouille au démarrage si configuré
+    // mount-only : ne doit vérifier le verrouillage qu'au démarrage, pas re-verrouiller à
+    // chaud si les réglages changent pendant que l'app est ouverte.
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <HashRouter>

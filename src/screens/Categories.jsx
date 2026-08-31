@@ -36,7 +36,7 @@ export default function Categories() {
   useEffect(() => {
     if (!state) return;
     navigate(pathname, { replace: true, state: null });
-  }, []); // eslint-disable-line — fires once on mount
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- fires once on mount
 
   const now    = new Date();
   const curKey = String(now.getMonth() + 1).padStart(2, "0") + "/" + now.getFullYear();
@@ -112,7 +112,7 @@ function exportCatsCSV(cats) {
 function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWithAmounts = [], setCategories, autoOpenCreate, autoOpenRuleForm }) {
   const [deletedIds, setDeletedIds] = useState(new Set());
   const [newOpen, setNewOpen]     = useState(false);
-  useEffect(() => { if (autoOpenCreate) setNewOpen(true); }, []); // eslint-disable-line
+  useEffect(() => { if (autoOpenCreate) setNewOpen(true); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- fires once on mount
   const [newName, setNewName]     = useState("");
   const [newColor, setNewColor]   = useState("#b8693d");
   const [ioOpen, setIoOpen]       = useState(false);
@@ -134,7 +134,7 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
   const [editRuleId, setEditRuleId]     = useState(null);
   const [editDraft, setEditDraft]       = useState({});
   const [ruleFormOpen, setRuleFormOpen] = useState(false);
-  useEffect(() => { if (autoOpenRuleForm) setRuleFormOpen(true); }, []); // eslint-disable-line
+  useEffect(() => { if (autoOpenRuleForm) setRuleFormOpen(true); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- fires once on mount
   const [newWhen, setNewWhen]           = useState("libellé contient");
   const [newOp, setNewOp]               = useState("");
 

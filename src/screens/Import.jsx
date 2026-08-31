@@ -71,7 +71,7 @@ function normalizeDate(raw) {
   const MONTHS_EN = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
   // Extraire uniquement la partie date si le champ contient aussi une heure (2024-01-15 10:23:45)
   const dateOnly = raw.trim().split(/[\sT]/)[0];
-  let d = dateOnly.replace(/[.\-]/g, "/");
+  let d = dateOnly.replace(/[.-]/g, "/");
   const curYear = new Date().getFullYear();
   if (/^\d{4}\/\d{2}\/\d{2}$/.test(d)) return d.slice(8) + "/" + d.slice(5, 7) + "/" + d.slice(0, 4);
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(d)) return d;
@@ -159,7 +159,7 @@ function simplifyLabel(lbl) {
 }
 
 function parseCSV(rawText, rules = []) {
-  const text = rawText.replace(/^﻿/, ""); // strip BOM
+  const text = rawText.replace(/^\uFEFF/, ""); // strip BOM
   const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return null;
 
