@@ -28,6 +28,7 @@ import societeGenerale from "./societeGenerale";
 import creditMutuel from "./creditMutuel";
 import cic from "./cic";
 import banquePopulaire from "./banquePopulaire";
+import caisseEpargne from "./caisseEpargne";
 
 // Ordre de priorité de détection : cic AVANT creditMutuel, les deux banques
 // étant du même groupe (Crédit Mutuel Alliance Fédérale) — un relevé CIC
@@ -41,6 +42,7 @@ export const BANKS = [
   cic,
   creditMutuel,
   banquePopulaire,
+  caisseEpargne,
 ];
 
 export function detectBank(fullText) {

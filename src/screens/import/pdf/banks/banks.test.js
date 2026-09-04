@@ -141,6 +141,18 @@ describe("Banque Populaire", () => {
   });
 });
 
+describe("Caisse d'Épargne", () => {
+  it("détecte la banque et extrait les transactions", async () => {
+    const { bank, lines } = await parseStatement(genericHeader, [
+      row("11/03/2026", "LIVRET A", { credit: "300,00" }),
+    ], ["CAISSE D'EPARGNE"]);
+    expect(bank?.id).toBe("ce");
+    const rows = parseWithBank(bank, lines);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ lblRaw: "LIVRET A", amt: 300 });
+  });
+});
+
 describe("cohérence du registre", () => {
   it("chaque banque a un id, un label et une fonction detect", () => {
     for (const bank of BANKS) {
