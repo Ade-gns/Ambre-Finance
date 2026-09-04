@@ -76,7 +76,6 @@ export default function Import() {
 
   function handleConfirm(mergedTxs) {
     if (!parsedTxs) return;
-    localStorage.removeItem("ambre.sampleMode");
     const txsToSave = Array.isArray(mergedTxs) ? mergedTxs : parsedTxs;
     const normalized = txsToSave.map(t => normalizeTransaction(t));
     setTransactions(prev => {

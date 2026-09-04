@@ -958,9 +958,9 @@ function SettingsBackup() {
 
   const handleDanger = key => {
     if (danger === key) {
-      if (key === "tx")  { setTransactions([]); setImportHistory([]); localStorage.removeItem("ambre.sampleMode"); }
+      if (key === "tx")  { setTransactions([]); setImportHistory([]); }
       if (key === "cat") { setCategories(DEFAULT_CATS); }
-      if (key === "all") { setTransactions([]); setCategories(DEFAULT_CATS); setAutoRules([]); setImportHistory([]); localStorage.removeItem("ambre.sampleMode"); }
+      if (key === "all") { setTransactions([]); setCategories(DEFAULT_CATS); setAutoRules([]); setImportHistory([]); }
       setDanger(null);
     } else {
       setDanger(key);
