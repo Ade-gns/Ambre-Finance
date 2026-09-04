@@ -26,12 +26,18 @@ import creditAgricole from "./creditAgricole";
 import banquePostale from "./banquePostale";
 import societeGenerale from "./societeGenerale";
 import creditMutuel from "./creditMutuel";
+import cic from "./cic";
 
+// Ordre de priorité de détection : cic AVANT creditMutuel, les deux banques
+// étant du même groupe (Crédit Mutuel Alliance Fédérale) — un relevé CIC
+// mentionnant le groupe en pied de page ne doit pas être routé vers le
+// gabarit Crédit Mutuel, plus générique sur ce point.
 export const BANKS = [
   bnpParibas,
   creditAgricole,
   banquePostale,
   societeGenerale,
+  cic,
   creditMutuel,
 ];
 

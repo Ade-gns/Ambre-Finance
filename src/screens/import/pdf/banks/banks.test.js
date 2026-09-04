@@ -110,6 +110,25 @@ describe("Crédit Mutuel", () => {
   });
 });
 
+describe("CIC", () => {
+  it("détecte la banque et extrait les transactions", async () => {
+    const { bank, lines } = await parseStatement(genericHeader, [
+      row("09/03/2026", "SNCF CONNECT", { debit: "45,00" }),
+    ], ["CIC", "RELEVE DE COMPTE"]);
+    expect(bank?.id).toBe("cic");
+    const rows = parseWithBank(bank, lines);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ lblRaw: "SNCF CONNECT", amt: -45 });
+  });
+
+  it("n'est pas confondu avec un relevé Crédit Mutuel", async () => {
+    const { bank } = await parseStatement(genericHeader, [
+      row("09/03/2026", "SNCF CONNECT", { debit: "45,00" }),
+    ], ["CREDIT MUTUEL"]);
+    expect(bank?.id).toBe("cm");
+  });
+});
+
 describe("cohérence du registre", () => {
   it("chaque banque a un id, un label et une fonction detect", () => {
     for (const bank of BANKS) {
