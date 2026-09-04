@@ -86,6 +86,18 @@ describe("La Banque Postale", () => {
   });
 });
 
+describe("Société Générale", () => {
+  it("détecte la banque et extrait les transactions", async () => {
+    const { bank, lines } = await parseStatement(genericHeader, [
+      row("07/03/2026", "FNAC.COM", { debit: "29,90" }),
+    ], ["SOCIETE GENERALE"]);
+    expect(bank?.id).toBe("sg");
+    const rows = parseWithBank(bank, lines);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ lblRaw: "FNAC.COM", amt: -29.9 });
+  });
+});
+
 describe("cohérence du registre", () => {
   it("chaque banque a un id, un label et une fonction detect", () => {
     for (const bank of BANKS) {
