@@ -52,7 +52,7 @@ const normHeader = s =>
   s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
    .replace(/[_"]/g, " ").replace(/\s+/g, " ").trim();
 
-function normalizeDate(raw) {
+export function normalizeDate(raw) {
   if (!raw || !raw.trim()) return "";
   const MONTHS_FR = ["jan","fev","mar","avr","mai","jun","jul","aou","sep","oct","nov","dec"];
   const MONTHS_EN = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
@@ -81,7 +81,7 @@ const SKIP_LABELS  = /^(solde|total|balance|report|a nouveau|cumul|sous.total|st
 const SKIP_STATES  = new Set(["failed","reverted","declined","pending","cancelled","annule","refuse"]);
 
 // Parsing robuste des montants : format européen, US, parenthèses, symboles monétaires
-function parseAmt(raw) {
+export function parseAmt(raw) {
   if (!raw || !raw.trim()) return NaN;
   let s = raw.trim();
   // Parenthèses = négatif : (150,00) → -150.00
@@ -122,7 +122,7 @@ const BANK_CAT_MAP = {
   epa:  ["epargne", "livret", "pel", "cloture", "saving"],
 };
 
-function mapBankCat(raw) {
+export function mapBankCat(raw) {
   if (!raw) return null;
   const n = raw.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   for (const [id, kws] of Object.entries(BANK_CAT_MAP)) {
