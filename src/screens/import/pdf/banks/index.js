@@ -23,10 +23,12 @@
 import { findHeaderRow, extractByColumns, mergeRoleKeywords } from "../columnParser";
 import bnpParibas from "./bnpParibas";
 import creditAgricole from "./creditAgricole";
+import banquePostale from "./banquePostale";
 
 export const BANKS = [
   bnpParibas,
   creditAgricole,
+  banquePostale,
 ];
 
 export function detectBank(fullText) {

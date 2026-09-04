@@ -73,6 +73,19 @@ describe("Crédit Agricole", () => {
   });
 });
 
+describe("La Banque Postale", () => {
+  it("détecte la banque et extrait les transactions", async () => {
+    const { bank, lines } = await parseStatement(genericHeader, [
+      row("05/03/2026", "RETRAIT DAB", { debit: "60,00" }),
+      row("06/03/2026", "VIREMENT CAF", { credit: "150,00" }),
+    ], ["LA BANQUE POSTALE", "Compte Chèques Postal"]);
+    expect(bank?.id).toBe("lbp");
+    const rows = parseWithBank(bank, lines);
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toMatchObject({ lblRaw: "VIREMENT CAF", amt: 150 });
+  });
+});
+
 describe("cohérence du registre", () => {
   it("chaque banque a un id, un label et une fonction detect", () => {
     for (const bank of BANKS) {
