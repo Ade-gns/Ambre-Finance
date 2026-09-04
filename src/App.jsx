@@ -13,6 +13,7 @@ import Alerts from "./screens/Alerts";
 import Onboarding from "./screens/Onboarding";
 import CommandPalette from "./components/CommandPalette";
 import LockScreen from "./components/LockScreen";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 /* Évalue les alertes à chaque changement de transactions et les persiste */
 function AlertEngine() {
@@ -113,25 +114,27 @@ export default function App() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <HashRouter>
-      <ThemeWatcher />
-      <AlertEngine />
-      <PaletteListener onOpen={openPalette} />
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-      {locked && <LockScreen phrase={lockPhrase} onUnlock={() => setLocked(false)} />}
-      <Routes>
-        {/* Route plein écran — pas de sidebar */}
-        <Route path="/onboarding" element={<OnboardingRoute />} />
+    <ErrorBoundary>
+      <HashRouter>
+        <ThemeWatcher />
+        <AlertEngine />
+        <PaletteListener onOpen={openPalette} />
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+        {locked && <LockScreen phrase={lockPhrase} onUnlock={() => setLocked(false)} />}
+        <Routes>
+          {/* Route plein écran — pas de sidebar */}
+          <Route path="/onboarding" element={<OnboardingRoute />} />
 
-        {/* Routes standard — avec sidebar */}
-        <Route path="/" element={<DataGuard><MainLayout><Dashboard /></MainLayout></DataGuard>} />
-        <Route path="/import" element={<MainLayout><Import /></MainLayout>} />
-        <Route path="/transactions" element={<DataGuard><MainLayout><Transactions /></MainLayout></DataGuard>} />
-        <Route path="/categories" element={<DataGuard><MainLayout><Categories /></MainLayout></DataGuard>} />
-        <Route path="/evolution" element={<DataGuard><MainLayout><Evolution /></MainLayout></DataGuard>} />
-        <Route path="/alerts" element={<DataGuard><MainLayout><Alerts /></MainLayout></DataGuard>} />
-        <Route path="/settings" element={<MainLayout><Settings /></MainLayout>} />
-      </Routes>
-    </HashRouter>
+          {/* Routes standard — avec sidebar */}
+          <Route path="/" element={<DataGuard><MainLayout><Dashboard /></MainLayout></DataGuard>} />
+          <Route path="/import" element={<MainLayout><Import /></MainLayout>} />
+          <Route path="/transactions" element={<DataGuard><MainLayout><Transactions /></MainLayout></DataGuard>} />
+          <Route path="/categories" element={<DataGuard><MainLayout><Categories /></MainLayout></DataGuard>} />
+          <Route path="/evolution" element={<DataGuard><MainLayout><Evolution /></MainLayout></DataGuard>} />
+          <Route path="/alerts" element={<DataGuard><MainLayout><Alerts /></MainLayout></DataGuard>} />
+          <Route path="/settings" element={<MainLayout><Settings /></MainLayout>} />
+        </Routes>
+      </HashRouter>
+    </ErrorBoundary>
   );
 }

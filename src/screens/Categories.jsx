@@ -204,19 +204,24 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
     return () => document.removeEventListener("mousedown", fn);
   }, [ioOpen]);
 
-  const allCats = catsWithAmounts
+  // Liste complète (hors suppressions), indépendante de la recherche : sert de base
+  // à `selected` pour que le panneau d'édition reste affiché même quand la recherche
+  // ne retourne aucun résultat côté liste de gauche.
+  const allCatsUnfiltered = catsWithAmounts
     .filter(c => !deletedIds.has(c.id))
-    .map(c => ({ ...c, ...(catEdits[c.id] || {}) }))
+    .map(c => ({ ...c, ...(catEdits[c.id] || {}) }));
+
+  const allCats = allCatsUnfiltered
     .filter(c => !catSearch || c.label.toLowerCase().includes(catSearch.toLowerCase()))
     .sort((a, b) => {
       if (sortMode === "alpha")  return a.label.localeCompare(b.label, "fr");
       if (sortMode === "amount") return (b.amount || 0) - (a.amount || 0);
       return 0;
     });
-  const selected = allCats.find(c => c.id === selectedCatId) ?? allCats[0];
+  const selected = allCatsUnfiltered.find(c => c.id === selectedCatId) ?? allCatsUnfiltered[0];
 
   const deleteCat = id => {
-    const next = allCats.find(c => c.id !== id);
+    const next = allCatsUnfiltered.find(c => c.id !== id);
     setDeletedIds(prev => new Set([...prev, id]));
     if (setCategories) setCategories(prev => prev.filter(c => c.id !== id));
     if (next) onSelectCat(next.id);
@@ -233,7 +238,7 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
     setNewOpen(false);
   };
 
-  const catRules = autoRules.filter(r => r.catId === selected.id).map(toUiRule);
+  const catRules = selected ? autoRules.filter(r => r.catId === selected.id).map(toUiRule) : [];
 
   const colorOptions = ["#b8693d","#cd8459","#a85a48","#3d2817","#6b7a4f","#7a5c3a","#9d8b73","#d4a76a"];
 
@@ -342,9 +347,13 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
             )}
           </div>
           <div className="cm-list">
-            {allCats.map(c => (
+            {allCats.length === 0 ? (
+              <div style={{ padding: "24px 18px", textAlign: "center", color: "var(--ink-500)", fontSize: 12 }}>
+                Aucune catégorie ne correspond à « {catSearch} ».
+              </div>
+            ) : allCats.map(c => (
               <div key={c.id}
-                   className={"cm-list-row" + (c.id === selected.id ? " active" : "")}
+                   className={"cm-list-row" + (c.id === selected?.id ? " active" : "")}
                    onClick={() => onSelectCat(c.id)}>
                 <span className="cm-drag">
                   <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor">
@@ -370,6 +379,7 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
         </div>
 
         {/* DROITE — éditeur de la catégorie sélectionnée */}
+        {selected ? (
         <div className="cm-card">
           <div className="cm-card-h">
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -567,6 +577,13 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
             ))}
           </div>
         </div>
+        ) : (
+          <div className="cm-card" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 240 }}>
+            <div style={{ textAlign: "center", color: "var(--ink-500)", fontSize: 13 }}>
+              Aucune catégorie à afficher.
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal — nouvelle catégorie */}
