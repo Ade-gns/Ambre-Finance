@@ -69,8 +69,11 @@ function nextTxId() {
   // Évite Date.now() + Math.random() : au-delà de ~10^12 ms, un double ne peut
   // plus représenter les décimales de Math.random(), ce qui provoque des
   // collisions d'id quand de nombreuses lignes sont normalisées dans la même
-  // milliseconde (import CSV en lot).
-  return Date.now() * 1000 + (_txIdSeq++ % 1000);
+  // milliseconde (import CSV en lot). Un compteur `% 1000` combiné à Date.now()
+  // a le même défaut au-delà de 1000 lignes dans la même milliseconde — le
+  // compteur seul (strictement croissant, jamais remis à zéro) garantit
+  // l'unicité sans dépendre de la granularité de l'horloge.
+  return `${Date.now()}-${_txIdSeq++}`;
 }
 
 export function normalizeTransaction(t, accountName = "Principal") {
