@@ -129,6 +129,18 @@ describe("CIC", () => {
   });
 });
 
+describe("Banque Populaire", () => {
+  it("détecte la banque et extrait les transactions", async () => {
+    const { bank, lines } = await parseStatement(genericHeader, [
+      row("10/03/2026", "LOYER MARS", { debit: "920,00" }),
+    ], ["BANQUE POPULAIRE"]);
+    expect(bank?.id).toBe("bp");
+    const rows = parseWithBank(bank, lines);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ lblRaw: "LOYER MARS", amt: -920 });
+  });
+});
+
 describe("cohérence du registre", () => {
   it("chaque banque a un id, un label et une fonction detect", () => {
     for (const bank of BANKS) {
