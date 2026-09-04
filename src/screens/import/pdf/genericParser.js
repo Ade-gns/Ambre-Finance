@@ -57,6 +57,10 @@ export function fallbackLineByLine(lines) {
       .replace(/\s+/g, " ")
       .trim();
     if (!lblRaw) continue;
+    // Deuxième test de bruit, sur le libellé seul : les motifs sont ancrés sur
+    // son début (/^solde…/) alors que la ligne complète commence par la date,
+    // donc le test ci-dessus sur `text` ne peut pas les faire matcher ici.
+    if (isNoiseLine(lblRaw)) continue;
 
     out.push({ d, lblRaw, amt });
   }

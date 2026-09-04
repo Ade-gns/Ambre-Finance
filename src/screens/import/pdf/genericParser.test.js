@@ -31,6 +31,20 @@ describe("tryGenericColumns — banque non reconnue avec en-tête standard", () 
     const lines = await linesFromRows([[{ text: "Bonjour, ceci n'est pas un tableau.", x: 50 }]]);
     expect(tryGenericColumns(lines)).toBeNull();
   });
+
+  // Les motifs de bruit génériques sont ancrés sur le début du libellé, alors
+  // qu'une ligne de solde reconstituée commence par sa date : sans test sur la
+  // cellule libellé, elle passait pour une transaction.
+  it("exclut une ligne de solde qui porte une date et un montant", async () => {
+    const lines = await linesFromRows([
+      [{ text: "Date", x: DATE_X }, { text: "Libellé", x: LBL_X }, { text: "Débit", x: DEBIT_X }, { text: "Crédit", x: CREDIT_X }],
+      [{ text: "01/03/2026", x: DATE_X }, { text: "ACHAT CB", x: LBL_X }, { text: "12,00", x: DEBIT_X }],
+      [{ text: "31/03/2026", x: DATE_X }, { text: "Solde au 31/03/2026", x: LBL_X }, { text: "2 495,71", x: CREDIT_X }],
+    ]);
+    const rows = tryGenericColumns(lines);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ lblRaw: "ACHAT CB", amt: -12 });
+  });
 });
 
 describe("fallbackLineByLine — dernier recours sans notion de colonnes", () => {
@@ -54,5 +68,17 @@ describe("fallbackLineByLine — dernier recours sans notion de colonnes", () =>
   it("ignore les lignes sans date reconnaissable", () => {
     const line = { y: 0, items: [{ text: "Montant total 150,00", x: 50, y: 0, w: 60, h: 9 }] };
     expect(fallbackLineByLine([line])).toEqual([]);
+  });
+
+  // Même trou que dans extractByColumns : le texte complet commence par la
+  // date, donc les motifs ancrés (/^solde…/) ne pouvaient jamais matcher.
+  it("ignore une ligne de solde qui commence par sa date", async () => {
+    const lines = await linesFromRows([
+      [{ text: "01/03/2026 ACHAT DIVERS SANS TABLEAU 12,50", x: 50 }],
+      [{ text: "31/03/2026 Solde au 31/03/2026 2 495,71", x: 50 }],
+    ]);
+    const rows = fallbackLineByLine(lines);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].lblRaw).toContain("ACHAT DIVERS SANS TABLEAU");
   });
 });

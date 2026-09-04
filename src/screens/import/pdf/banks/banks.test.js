@@ -58,6 +58,24 @@ describe("BNP Paribas", () => {
     expect(rows[0]).toMatchObject({ lblRaw: "BOULANGERIE PICHON", amt: -8.7 });
     expect(rows[1]).toMatchObject({ lblRaw: "VIREMENT DUPONT SAS", amt: 2560 });
   });
+
+  // Cas réel : sur un vrai relevé, une ligne de frais bancaires porte sa
+  // propre date et son propre montant, comme n'importe quelle opération. Le
+  // test ci-dessus ne le couvrait pas (sa ligne de bruit n'a ni date ni
+  // montant) et laissait passer une ligne de frais comme une transaction.
+  it("exclut une ligne de bruit qui porte sa propre date et son propre montant", async () => {
+    const { bank, lines } = await parseStatement(genericHeader, [
+      row("01/03/2026", "BOULANGERIE PICHON", { debit: "8,70" }),
+      row("05/03/2026", "Cotisation carte Visa Premier", { debit: "12,00" }),
+      row("06/03/2026", "VIREMENT DUPONT SAS", { credit: "2 560,00" }),
+    ], ["BNP PARIBAS"]);
+    const rows = parseWithBank(bank, lines);
+    expect(rows).toHaveLength(2);
+    // La ligne de frais ne doit ni devenir une transaction, ni être recollée
+    // au libellé de la transaction précédente.
+    expect(rows[0]).toMatchObject({ lblRaw: "BOULANGERIE PICHON", amt: -8.7 });
+    expect(rows[1]).toMatchObject({ lblRaw: "VIREMENT DUPONT SAS", amt: 2560 });
+  });
 });
 
 describe("Crédit Agricole", () => {
@@ -163,6 +181,38 @@ describe("LCL", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ lblRaw: "TOTAL ENERGIES", amt: -61 });
   });
+});
+
+// Chacune des 9 banques déclare un motif de bruit visant une ligne de frais
+// ("cotisation", "frais"…) ou un en-tête répété. Ces lignes portent en
+// pratique une date et un montant, donc ce cas doit être couvert pour toutes,
+// pas seulement pour BNP Paribas.
+const NOISE_WITH_DATE_AND_AMOUNT = [
+  { id: "bnp", letterhead: ["BNP PARIBAS"],                       noise: "Cotisation carte Visa Premier" },
+  { id: "ca",  letterhead: ["CREDIT AGRICOLE"],                   noise: "Cotisation compte a composer" },
+  { id: "lbp", letterhead: ["LA BANQUE POSTALE"],                 noise: "Extrait de compte n 4212" },
+  { id: "sg",  letterhead: ["SOCIETE GENERALE"],                  noise: "Frais de tenue de compte" },
+  { id: "cic", letterhead: ["CIC", "RELEVE DE COMPTE"],           noise: "Cotisation carte" },
+  { id: "cm",  letterhead: ["CREDIT MUTUEL"],                     noise: "Cotisation carte bancaire" },
+  { id: "bp",  letterhead: ["BANQUE POPULAIRE"],                  noise: "Cotisation mensuelle" },
+  { id: "ce",  letterhead: ["CAISSE D'EPARGNE"],                  noise: "Cotisation formule bouquet" },
+  { id: "lcl", letterhead: ["LCL", "RELEVE DE COMPTE"],           noise: "Cotisation carte" },
+];
+
+describe("filtrage du bruit daté et chiffré, pour chaque banque", () => {
+  it.each(NOISE_WITH_DATE_AND_AMOUNT)(
+    "$id — une ligne de bruit avec date et montant n'est pas prise pour une transaction",
+    async ({ id, letterhead, noise }) => {
+      const { bank, lines } = await parseStatement(genericHeader, [
+        row("01/03/2026", "ACHAT REEL", { debit: "10,00" }),
+        row("02/03/2026", noise, { debit: "12,00" }),
+      ], letterhead);
+      expect(bank?.id).toBe(id);
+      const rows = parseWithBank(bank, lines);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ lblRaw: "ACHAT REEL", amt: -10 });
+    },
+  );
 });
 
 describe("cohérence du registre", () => {

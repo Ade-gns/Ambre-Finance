@@ -89,13 +89,22 @@ export function extractByColumns(lines, header, extraNoisePatterns = []) {
     const text = lineText(line, cells);
     const byRole = cellsForColumns(cells, columns);
 
+    // Le bruit est écarté avant toute autre décision : une ligne de frais
+    // bancaires porte normalement sa propre date et son propre montant, et
+    // serait donc prise pour une transaction si on ne la testait que dans les
+    // branches « pas de date » / « pas de montant ».
+    // On teste aussi la cellule libellé isolément : les motifs sont ancrés sur
+    // le début du libellé (/^cotisation carte/…) alors que le texte complet de
+    // la ligne, lui, commence par la date.
+    if (isNoiseLine(text, extraNoisePatterns)) continue;
+    if (byRole.lbl && isNoiseLine(byRole.lbl, extraNoisePatterns)) continue;
+
     const dateVal = byRole.date ? normalizeDate(byRole.date) : "";
     const validDate = /^\d{2}\/\d{2}\/\d{4}$/.test(dateVal);
 
     if (!validDate) {
-      // Pas de date sur cette ligne : bruit connu → ignorer, sinon
-      // continuation du libellé de la transaction en cours.
-      if (isNoiseLine(text, extraNoisePatterns)) continue;
+      // Pas de date sur cette ligne : continuation du libellé de la
+      // transaction en cours (libellés multi-lignes).
       if (current && byRole.lbl) current.lblRaw += " " + byRole.lbl;
       continue;
     }
@@ -116,7 +125,6 @@ export function extractByColumns(lines, header, extraNoisePatterns = []) {
     if (isNaN(amt) || amt === 0) {
       // Une date sans montant exploitable : probablement une ligne de solde
       // ou une continuation — on ignore plutôt que de fabriquer une transaction.
-      if (isNoiseLine(text, extraNoisePatterns)) continue;
       if (current && byRole.lbl) current.lblRaw += " " + byRole.lbl;
       continue;
     }
