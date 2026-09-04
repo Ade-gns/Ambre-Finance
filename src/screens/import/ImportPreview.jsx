@@ -144,6 +144,12 @@ export default function ImportPreview({ onConfirm, onCancel, txs, fileName, file
                                 transform: rotate(45deg); }
         .ip-date { font-family: var(--font-mono); font-size: 12px; color: var(--ink-500); }
         .ip-lbl { font-size: 13px; color: var(--ink-800); font-weight: 500; }
+        .ip-generic-badge { display: inline-block; margin-left: 8px; padding: 1px 7px;
+                             border-radius: 999px; font-size: 9.5px; font-weight: 500;
+                             letter-spacing: 0.04em; text-transform: uppercase;
+                             color: var(--amber-500); background: var(--amber-100);
+                             border: 1px solid rgba(184,105,61,0.3); vertical-align: middle;
+                             cursor: help; }
         .ip-sub { font-size: 10px; color: var(--ink-500); font-family: var(--font-mono);
                   margin-top: 2px; letter-spacing: 0.04em; text-transform: uppercase; }
 
@@ -294,7 +300,14 @@ export default function ImportPreview({ onConfirm, onCancel, txs, fileName, file
                   <span className="ip-cb"/>
                   <span className="ip-date">{t.d}</span>
                   <div>
-                    <div className="ip-lbl">{t.lbl}</div>
+                    <div className="ip-lbl">
+                      {t.lbl}
+                      {t.tpl === "generic" && (
+                        <span className="ip-generic-badge" title="Extraite en mode générique (pas de gabarit dédié pour cette banque) — à vérifier plus attentivement.">
+                          générique
+                        </span>
+                      )}
+                    </div>
                     {t.sub && <div className="ip-sub">{t.sub}</div>}
                   </div>
                   <div style={{ position: "relative" }}>

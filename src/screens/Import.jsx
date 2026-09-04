@@ -60,7 +60,35 @@ export default function Import() {
           setState("error");
         }
       })();
-    } else if (ext === "pdf" || ext === "ofx" || ext === "qif") {
+    } else if (ext === "pdf") {
+      (async () => {
+        try {
+          // Import dynamique : pdfjs-dist (~1,3 Mo avec son worker) n'est
+          // chargé que si l'utilisateur importe effectivement un PDF, pas au
+          // démarrage de l'app.
+          const { parsePdfBankStatement } = await import("./import/pdf/parsePdf");
+          const buffer = await file.arrayBuffer();
+          const result = await parsePdfBankStatement(buffer, autoRules);
+
+          if (result.error === "password") {
+            setParseError("Ce PDF est protégé par un mot de passe. Retirez la protection (ou exportez un CSV depuis votre espace bancaire) avant de l'importer.");
+            setState("error");
+          } else if (result.error === "no-text") {
+            setParseError("Ce PDF ne contient pas de texte extractible — c'est probablement un scan ou une image plutôt qu'un PDF natif. Réessayez avec l'export PDF original de votre banque, ou un CSV.");
+            setState("error");
+          } else if (result.error === "no-transactions" || result.error === "corrupt") {
+            setParseError("Aucune transaction reconnaissable dans ce PDF. Le format de ce relevé n'est peut-être pas encore pris en charge — exportez un CSV depuis votre espace bancaire en attendant.");
+            setState("error");
+          } else {
+            setParsedTxs(result.transactions);
+            setState("preview");
+          }
+        } catch (err) {
+          setParseError("Impossible de lire ce PDF" + (err?.message ? " : " + err.message : "") + ". Le fichier est peut-être corrompu.");
+          setState("error");
+        }
+      })();
+    } else if (ext === "ofx" || ext === "qif") {
       setParseError(`La lecture des fichiers .${ext} nécessite le moteur Rust (en développement). Exportez un CSV depuis votre espace bancaire en attendant.`);
       setState("error");
     } else {
@@ -88,7 +116,7 @@ export default function Import() {
       tx:   parsedTxs.length,
       size: fmtSize(fileSize),
       period: "—",
-      fmt:  "csv",
+      fmt:  (fileName.split(".").pop() || "csv").toLowerCase(),
     }, ...prev.slice(0, 9)]);
     setState("success");
   }
