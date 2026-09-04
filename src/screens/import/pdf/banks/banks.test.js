@@ -98,6 +98,18 @@ describe("Société Générale", () => {
   });
 });
 
+describe("Crédit Mutuel", () => {
+  it("détecte la banque et extrait les transactions", async () => {
+    const { bank, lines } = await parseStatement(genericHeader, [
+      row("08/03/2026", "PHARMACIE CENTRALE", { debit: "15,60" }),
+    ], ["CREDIT MUTUEL"]);
+    expect(bank?.id).toBe("cm");
+    const rows = parseWithBank(bank, lines);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ lblRaw: "PHARMACIE CENTRALE", amt: -15.6 });
+  });
+});
+
 describe("cohérence du registre", () => {
   it("chaque banque a un id, un label et une fonction detect", () => {
     for (const bank of BANKS) {

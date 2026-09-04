@@ -25,12 +25,14 @@ import bnpParibas from "./bnpParibas";
 import creditAgricole from "./creditAgricole";
 import banquePostale from "./banquePostale";
 import societeGenerale from "./societeGenerale";
+import creditMutuel from "./creditMutuel";
 
 export const BANKS = [
   bnpParibas,
   creditAgricole,
   banquePostale,
   societeGenerale,
+  creditMutuel,
 ];
 
 export function detectBank(fullText) {
