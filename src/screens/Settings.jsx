@@ -891,6 +891,9 @@ function SettingsBackup() {
   const [dbPath, setDbPath]           = useState("ambre.db");
   const [backupFolder, setBackupFolder] = useState("~/Documents/Ambre-backups/");
   const [restoreMsg, setRestoreMsg]   = useState(null);
+  const [restorePending, setRestorePending] = useState(null); // { fileName, data } | null
+  const [restoreError, setRestoreError]     = useState(null);
+  const restoreArmTimer               = useRef(null);
   const [lastBackupAt, setLastBackupAt] = useLocalStorage("stg.lastBackupAt", null);
   const dbFileRef                     = useRef(null);
   const backupFolderRef               = useRef(null);
@@ -913,6 +916,41 @@ function SettingsBackup() {
       setLastBackupAt(new Date().toISOString());
       setTimeout(() => setBackupRun("idle"), 2500);
     }, 1800);
+  };
+
+  // Lit et valide le fichier choisi ; l'application réelle attend une confirmation
+  // (bouton armé, comme la zone sensible ci-dessous) avant d'écraser les données.
+  const handleRestoreFile = async e => {
+    const file = e.target.files[0];
+    e.target.value = ""; // permet de resélectionner le même fichier après une erreur
+    if (!file) return;
+    setRestoreError(null);
+    if (!file.name.toLowerCase().endsWith(".json")) {
+      setRestoreError("Format non pris en charge : seules les sauvegardes .json (export « Structure complète ») peuvent être restaurées pour l'instant.");
+      setTimeout(() => setRestoreError(null), 5000);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(await file.text());
+      if (!Array.isArray(parsed.transactions)) throw new Error("le fichier ne contient pas de transactions");
+      setRestorePending({ fileName: file.name, data: parsed });
+      clearTimeout(restoreArmTimer.current);
+      restoreArmTimer.current = setTimeout(() => setRestorePending(null), 6000);
+    } catch (err) {
+      setRestoreError("Fichier illisible : " + err.message);
+      setTimeout(() => setRestoreError(null), 5000);
+    }
+  };
+
+  const confirmRestore = () => {
+    clearTimeout(restoreArmTimer.current);
+    const { data, fileName } = restorePending;
+    setTransactions(data.transactions);
+    if (Array.isArray(data.categories)) setCategories(data.categories);
+    if (Array.isArray(data.autoRules))  setAutoRules(data.autoRules);
+    setRestorePending(null);
+    setRestoreMsg(`✓ Restauré depuis ${fileName}`);
+    setTimeout(() => setRestoreMsg(null), 3000);
   };
 
   const backupAgoLabel = () => {
@@ -1116,18 +1154,27 @@ function SettingsBackup() {
             : backupRun === "done"   ? "✓ Sauvegarde créée"
             :                          "Lancer une sauvegarde maintenant"}
           </button>
-          <input ref={restoreRef} type="file" accept=".json,.sqlite,.db" style={{ display: "none" }}
-                 onChange={e => {
-                   if (e.target.files[0]) {
-                     setRestoreMsg("✓ Fichier sélectionné : " + e.target.files[0].name);
-                     setTimeout(() => setRestoreMsg(null), 3000);
-                   }
-                 }}/>
-          <button className="stg-btn" onClick={() => restoreRef.current?.click()}
-                  style={restoreMsg ? { color: "var(--sage-500)", borderColor: "rgba(107,122,79,0.4)" } : {}}>
-            <IcImport size={13}/>{restoreMsg || "Restaurer depuis une sauvegarde"}
+          <input ref={restoreRef} type="file" accept=".json" style={{ display: "none" }}
+                 onChange={handleRestoreFile}/>
+          <button className="stg-btn"
+                  onClick={() => restorePending ? confirmRestore() : restoreRef.current?.click()}
+                  style={restorePending
+                    ? { color: "var(--rose-500)", borderColor: "var(--rose-500)", background: "rgba(168,90,72,0.1)", fontWeight: 500 }
+                    : restoreMsg ? { color: "var(--sage-500)", borderColor: "rgba(107,122,79,0.4)" } : {}}>
+            <IcImport size={13}/>
+            {restorePending
+              ? `⚠ Confirmer : remplacer par ${restorePending.data.transactions.length} transaction${restorePending.data.transactions.length > 1 ? "s" : ""} ?`
+              : restoreMsg || "Restaurer depuis une sauvegarde"}
           </button>
+          {restorePending && (
+            <button className="stg-btn" onClick={() => { clearTimeout(restoreArmTimer.current); setRestorePending(null); }}>
+              Annuler
+            </button>
+          )}
         </div>
+        {restoreError && (
+          <div style={{ fontSize: 11.5, color: "var(--rose-500)", marginTop: -6 }}>{restoreError}</div>
+        )}
       </div>
 
       <div className="stg-card">
