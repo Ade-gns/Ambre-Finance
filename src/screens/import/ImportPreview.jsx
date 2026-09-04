@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { fmtEUR } from "../../lib/chartPrimitives";
+import { fmtEUR } from "../../lib/chartUtils";
 import { useCategories, useAutoRules } from "../../lib/store";
 import { IcLock, IcArrowR, IcChevDn, IcPlus } from "../../lib/icons";
 import { fmtSize } from "./csvParser";

@@ -11,8 +11,9 @@ import {
   txMonthKey, monthKeyLabel, parseTxDate, MONTHS_FR
 } from "../lib/store";
 import {
-  Sparkline, RingGauge, fmtEUR, pathSmooth
+  Sparkline, RingGauge
 } from "../lib/chartPrimitives";
+import { fmtEUR, pathSmooth } from "../lib/chartUtils";
 import {
   IcCalendar, IcSearch, IcUpload, IcChevDn, IcArrowUp, IcArrowDn, IcDot
 } from "../lib/icons";

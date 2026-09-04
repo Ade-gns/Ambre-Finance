@@ -6,7 +6,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTransactions, useCategories, useAutoRules, applyRules, reapplyRules, computeCatTotals, DEFAULT_CATS, txMonthKey, monthKeyLabel, monthKeyShort, txMonths, autoCat } from "../lib/store";
-import { fmtEUR, pathSmooth } from "../lib/chartPrimitives";
+import { fmtEUR, pathSmooth } from "../lib/chartUtils";
 import {
   IcSearch, IcCalendar, IcFilter, IcArrowR, IcChevDn,
   IcPlus, IcTag, IcSettings, IcChart, IcWallet

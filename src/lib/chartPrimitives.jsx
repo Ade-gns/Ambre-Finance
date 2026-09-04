@@ -2,35 +2,10 @@
 // Pas de dépendances; pur SVG pour garder la maîtrise visuelle.
 // Converti du fichier d'origine en module ES.
 
-/* ───── helpers ───── */
-export const lerp = (a, b, t) => a + (b - a) * t;
+import { fmtEUR, pathSmooth } from "./chartUtils";
+
 let _gradCounter = 0;
 const nextGradId = (prefix) => `${prefix}-${++_gradCounter}`;
-
-export const fmtEUR = (n, frac = 0) =>
-  new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-    minimumFractionDigits: frac,
-    maximumFractionDigits: frac
-  }).format(n);
-
-export function pathSmooth(points, tension = 0.35) {
-  if (points.length < 2) return "";
-  const d = [`M ${points[0][0]} ${points[0][1]}`];
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[i - 1] || points[i];
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const p3 = points[i + 2] || p2;
-    const cp1x = p1[0] + (p2[0] - p0[0]) * tension / 3;
-    const cp1y = p1[1] + (p2[1] - p0[1]) * tension / 3;
-    const cp2x = p2[0] - (p3[0] - p1[0]) * tension / 3;
-    const cp2y = p2[1] - (p3[1] - p1[1]) * tension / 3;
-    d.push(`C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2[0]} ${p2[1]}`);
-  }
-  return d.join(" ");
-}
 
 /* ───── Sparkline ───── */
 export function Sparkline({ data, width = 120, height = 32, color = "#b8693d", fill = true, strokeWidth = 1.5 }) {

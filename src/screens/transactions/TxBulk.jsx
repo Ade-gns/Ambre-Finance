@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useTransactions, useCategories, txMonths, monthKeyLabel } from "../../lib/store";
-import { fmtEUR } from "../../lib/chartPrimitives";
+import { fmtEUR } from "../../lib/chartUtils";
 import { IcSearch, IcCalendar, IcChevDn, IcTag } from "../../lib/icons";
 import { getWeekGroups, exportTxCSV, MONTH_NUM } from "./txHelpers";
 import { TxHeader, TxSummaryReal, TxRow, TxTableHead } from "./TxAtoms";
@@ -179,7 +179,7 @@ export default function TxBulk({ onClose, startIdx }) {
       <div className="tx-table">
         <TxTableHead />
         <div className="tx-tbody">
-          {getWeekGroups(visibleTxs).map((g, gi) => {
+          {getWeekGroups(visibleTxs).map((g, _gi) => {
             // Find global indices for this group's transactions
             const groupWithIdx = g.txs.map(t => ({ t, idx: allTxs.findIndex(tx => tx.id === t.id) }));
             const selInGroup = groupWithIdx.filter(({ idx }) => selected.includes(idx)).length;
@@ -192,7 +192,7 @@ export default function TxBulk({ onClose, startIdx }) {
                     {selInGroup > 0 ? `${selInGroup} sélectionnée${selInGroup > 1 ? "s" : ""}` : ""}
                   </span>
                 </div>
-                {groupWithIdx.map(({ t, idx }, i) => (
+                {groupWithIdx.map(({ t, idx }, _i) => (
                   <TxRow key={t.id} t={t} catDefs={catDefs}
                          bulk={selected.includes(idx)} onClick={() => toggle(idx)}/>
                 ))}

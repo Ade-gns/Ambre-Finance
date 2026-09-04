@@ -4,8 +4,9 @@
    - Small multiples : un sparkline par catégorie */
 
 import { useState, useRef, useEffect } from "react";
-import { useTransactions, useCategories, computeMonthly, computeCatTotals, monthKeyLabel } from "../lib/store";
-import { fmtEUR, pathSmooth, Sparkline } from "../lib/chartPrimitives";
+import { useTransactions, useCategories, computeMonthly, monthKeyLabel } from "../lib/store";
+import { fmtEUR, pathSmooth } from "../lib/chartUtils";
+import { Sparkline } from "../lib/chartPrimitives";
 import { IcCalendar, IcChevDn } from "../lib/icons";
 
 export default function Evolution() {

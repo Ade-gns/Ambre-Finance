@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTransactions, useCategories, txMonths, monthKeyLabel } from "../../lib/store";
-import { fmtEUR } from "../../lib/chartPrimitives";
+import { fmtEUR } from "../../lib/chartUtils";
 import { IcPlus } from "../../lib/icons";
 import { getWeekGroups, exportTxCSV, MONTH_NUM } from "./txHelpers";
 import { TxHeader, TxFilterBar, TxSummaryReal, TxRow, TxTableHead } from "./TxAtoms";
@@ -128,7 +128,7 @@ export default function TxDefault({ onRowClick, onSelectMany, autoOpenAdd }) {
         <TxTableHead sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
         <div className="tx-tbody">
           {useGroups
-            ? groups.map((g, gi) => {
+            ? groups.map((g, _gi) => {
                 if (g.txs.length === 0) return null;
                 const groupSum = g.txs.reduce((s, t) => s + t.amt, 0);
                 return (
@@ -137,7 +137,7 @@ export default function TxDefault({ onRowClick, onSelectMany, autoOpenAdd }) {
                       <span>{g.label}</span>
                       <span className="sum">{groupSum > 0 ? "+" : ""}{fmtEUR(groupSum, 2)}</span>
                     </div>
-                    {g.txs.map((t, i) => (
+                    {g.txs.map((t, _i) => (
                       <TxRow key={t.id} t={t} catDefs={catDefs} onClick={() => onRowClick(t)}
                              onCheckboxClick={() => onSelectMany(allTxs.findIndex(tx => tx.id === t.id))}
                              menuOpen={openMenuId === t.id}

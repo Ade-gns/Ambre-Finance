@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { fmtEUR } from "../../lib/chartPrimitives";
+import { fmtEUR } from "../../lib/chartUtils";
 import { IcLock, IcArrowR, IcHome, IcList, IcImport, IcTag, IcBell } from "../../lib/icons";
 
 /* ─────────────────────────────────────────────────────────────────

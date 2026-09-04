@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTransactions, useCategories } from "../lib/store";
-import { fmtEUR } from "../lib/chartPrimitives";
+import { fmtEUR } from "../lib/chartUtils";
 
 const ACTIONS = [
   { kind: "action", id: "import",  label: "Importer un relevé bancaire", sub: "CSV, OFX…",              icon: "↑" },

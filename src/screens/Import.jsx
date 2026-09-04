@@ -5,7 +5,7 @@
    4. error   — erreur de lecture + cas fréquents */
 
 import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { useTransactions, useImportHistory, normalizeTransaction, useAutoRules } from "../lib/store";
 import { parseCSV, fmtSize } from "./import/csvParser";
 import ImportEmpty from "./import/ImportEmpty";
@@ -14,9 +14,8 @@ import ImportSuccess from "./import/ImportSuccess";
 import ImportError from "./import/ImportError";
 
 export default function Import() {
-  const navigate = useNavigate();
   const location = useLocation();
-  const [transactions, setTransactions] = useTransactions();
+  const [, setTransactions] = useTransactions();
   const [importHistory, setImportHistory] = useImportHistory();
   const [autoRules] = useAutoRules();
   const [state, setState]           = useState("empty");

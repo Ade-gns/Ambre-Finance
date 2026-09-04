@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { fmtEUR } from "../../lib/chartPrimitives";
+import { fmtEUR } from "../../lib/chartUtils";
 import { IcSearch, IcCalendar, IcFilter, IcArrowDn, IcChevDn, IcPlus, IcUpload } from "../../lib/icons";
 import { txCatStyle } from "./txHelpers";
 
@@ -188,7 +188,7 @@ export function TxSummary() {
   );
 }
 
-export function TxSummaryReal({ txs = [], month = "", allCount = 0 }) {
+export function TxSummaryReal({ txs = [], month = "" }) {
   const debit  = txs.filter(t => t.amt < 0).reduce((s, t) => s + t.amt, 0);
   const credit = txs.filter(t => t.amt > 0).reduce((s, t) => s + t.amt, 0);
   const expTxs = txs.filter(t => t.amt < 0);

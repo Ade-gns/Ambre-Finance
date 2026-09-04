@@ -8,7 +8,7 @@ import { simplifyLabel } from "./csvParser";
    ───────────────────────────────────────────────────────────────── */
 export default function RulesConfigModal({ txs, existingRules, onSave, onClose }) {
   const [categories]                    = useCategories();
-  const [transactions, setTransactions] = useTransactions();
+  const [, setTransactions] = useTransactions();
   const [autoRulesStore, setAutoRulesStore] = useAutoRules();
   const catById = Object.fromEntries(categories.map(c => [c.id, c]));
 

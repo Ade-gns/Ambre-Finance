@@ -9,7 +9,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useLocalStorage } from "../lib/storage";
 import { useTransactions, useCategories, useImportHistory, useAutoRules, useAlertDefs, DEFAULT_CATS, txMonthKey, parseTxDate, computeAlertNotifs } from "../lib/store";
-import { fmtEUR } from "../lib/chartPrimitives";
+import { fmtEUR } from "../lib/chartUtils";
 import {
   IcSettings, IcWallet, IcTag, IcBell, IcLock, IcSun, IcDot,
   IcChevDn, IcPlus, IcImport, IcUpload

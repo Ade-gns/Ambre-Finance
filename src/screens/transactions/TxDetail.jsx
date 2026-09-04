@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTransactions, useCategories, useAutoRules, applyRules, parseTxDate } from "../../lib/store";
-import { fmtEUR } from "../../lib/chartPrimitives";
+import { fmtEUR } from "../../lib/chartUtils";
 import { IcChevDn } from "../../lib/icons";
 import { txCatStyle, getWeekGroups } from "./txHelpers";
 import { TxHeader, TxFilterBar, TxSummary, TxRow, TxTableHead } from "./TxAtoms";
@@ -25,7 +25,7 @@ function TxDetailList({ tSel, catDefs }) {
                   <span>{g.label}</span>
                   <span className="sum">{groupSum > 0 ? "+" : ""}{fmtEUR(groupSum, 2)}</span>
                 </div>
-                {g.txs.slice(0, gi === 0 ? 5 : 6).map((t, i) => (
+                {g.txs.slice(0, gi === 0 ? 5 : 6).map((t, _i) => (
                   <TxRow key={t.id} t={t} catDefs={catDefs}
                          selected={tSel === t} dense={gi > 0}/>
                 ))}
