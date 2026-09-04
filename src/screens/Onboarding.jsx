@@ -7,7 +7,7 @@
 
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { useTransactions } from "../lib/store";
+import { useLocalStorage } from "../lib/storage";
 import { dbSet } from "../lib/db";
 import { IcLock, IcTag, IcChart, IcUpload } from "../lib/icons";
 
@@ -118,7 +118,10 @@ const SAMPLE_TRANSACTIONS = SAMPLE_RAW.map(([d, lbl, sub, cat, amt, mode], i) =>
 
 export default function Onboarding() {
   const navigate = useNavigate();
-  const [, setTransactions] = useTransactions();
+  // useLocalStorage brut (et non useTransactions()) : celui-ci sort
+  // automatiquement du mode exemple à chaque écriture, ce qui annulerait
+  // sampleMode à l'instant même où on vient de l'activer ci-dessous.
+  const [, setTransactions] = useLocalStorage("transactions", []);
   const fileRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
 

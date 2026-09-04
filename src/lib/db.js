@@ -62,6 +62,26 @@ export function dbSet(key, value) {
   _persist(key, value).catch(err => console.error("[ambre/db] persist failed:", key, err));
 }
 
+/* Retire le flag sampleMode sans jamais toucher aux transactions, dès qu'une
+ * vraie écriture a lieu par-dessus les données d'exemple (ajout manuel, import,
+ * édition, suppression, restauration de sauvegarde...). Sans ça, _cleanSampleIfNeeded(Async)
+ * supprimerait toute la clé "transactions" — y compris les vraies données — au
+ * prochain démarrage, tant que l'utilisateur n'a pas explicitement quitté le
+ * mode exemple. Voir useTransactions() dans store.js, seul point d'appel. */
+export function clearSampleMode() {
+  const legacy = typeof window !== "undefined" ? window.localStorage.getItem("ambre.sampleMode") : null;
+  if (cache.get("sampleMode") !== "1" && legacy !== "1") return;
+  cache.delete("sampleMode");
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(PREFIX + "sampleMode");
+    window.localStorage.removeItem("ambre.sampleMode");
+  }
+  if (isTauri && db) {
+    db.execute(`DELETE FROM store WHERE key = 'sampleMode'`)
+      .catch(err => console.error("[ambre/db] clearSampleMode failed:", err));
+  }
+}
+
 /* Supprime les données exemple en mode navigateur (synchrone). */
 function _cleanSampleIfNeeded() {
   if (cache.get("sampleMode") !== "1") return;

@@ -1,4 +1,5 @@
 import { useLocalStorage } from "./storage";
+import { clearSampleMode } from "./db";
 
 export const DEFAULT_CATS = [
   { id: "inc",  label: "Revenus",       color: "#6b7a4f", budget: 0,    iconIdx: 0 },
@@ -120,7 +121,19 @@ export function computeCatTotals(transactions, cats, monthKey) {
     .filter(c => c.amount > 0);
 }
 
-export function useTransactions()   { return useLocalStorage("transactions",   []); }
+export function useTransactions() {
+  const [transactions, setTransactionsRaw] = useLocalStorage("transactions", []);
+  // Toute écriture réelle sur "transactions" (ajout manuel, import, édition,
+  // suppression, restauration...) sort automatiquement du mode exemple — sans
+  // ça les vraies données ajoutées par-dessus l'exemple seraient supprimées
+  // au prochain démarrage. Seul le chargement initial de l'exemple
+  // (Onboarding.jsx) contourne ce hook en écrivant directement via dbSet.
+  const setTransactions = updater => {
+    setTransactionsRaw(updater);
+    clearSampleMode();
+  };
+  return [transactions, setTransactions];
+}
 export function useCategories()     { return useLocalStorage("categories",     DEFAULT_CATS); }
 export function useImportHistory()  { return useLocalStorage("importHistory",  []); }
 export function useAutoRules()      { return useLocalStorage("autoRules",      []); }
