@@ -60,6 +60,19 @@ describe("BNP Paribas", () => {
   });
 });
 
+describe("Crédit Agricole", () => {
+  it("détecte la banque et extrait les transactions", async () => {
+    const { bank, lines } = await parseStatement(genericHeader, [
+      row("03/03/2026", "CARREFOUR MARKET", { debit: "42,10" }),
+      row("04/03/2026", "VIR SEPA RECU", { credit: "300,00" }),
+    ], ["CREDIT AGRICOLE", "Caisse régionale d'Ile-de-France"]);
+    expect(bank?.id).toBe("ca");
+    const rows = parseWithBank(bank, lines);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ lblRaw: "CARREFOUR MARKET", amt: -42.1 });
+  });
+});
+
 describe("cohérence du registre", () => {
   it("chaque banque a un id, un label et une fonction detect", () => {
     for (const bank of BANKS) {
