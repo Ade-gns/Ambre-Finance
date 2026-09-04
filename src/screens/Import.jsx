@@ -8,6 +8,8 @@ import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useTransactions, useImportHistory, normalizeTransaction, useAutoRules } from "../lib/store";
 import { parseCSV, fmtSize } from "./import/csvParser";
+import { parseOFX, looksLikeOfx } from "./import/ofxParser";
+import { parseQIF, looksLikeQif } from "./import/qifParser";
 import ImportEmpty from "./import/ImportEmpty";
 import ImportPreview from "./import/ImportPreview";
 import ImportSuccess from "./import/ImportSuccess";
@@ -30,24 +32,31 @@ export default function Import() {
     setFileSize(file.size);
     const ext = file.name.split(".").pop().toLowerCase();
 
-    if (ext === "csv" || ext === "txt") {
+    // Lecture texte avec repli d'encodage — partagée par le CSV, l'OFX et le
+    // QIF, qui sortent tous les trois des mêmes espaces bancaires français et
+    // souffrent donc du même Windows-1252/ISO-8859-1.
+    const readTextWithFallback = async () => {
       const readAs = (encoding) => new Promise((resolve, reject) => {
         const r = new FileReader();
         r.onload  = e => resolve(e.target.result);
         r.onerror = () => reject(new Error("Lecture impossible"));
         r.readAsText(file, encoding);
       });
+      let text = await readAs("UTF-8");
+      // Un fichier non-UTF-8 produit des caractères de remplacement U+FFFD —
+      // on réessaie avec les encodages les plus probables jusqu'à ce qu'ils
+      // disparaissent.
+      for (const enc of ["windows-1252", "ISO-8859-1"]) {
+        if (!text.includes("�")) break;
+        text = await readAs(enc);
+      }
+      return text;
+    };
+
+    if (ext === "csv" || ext === "txt") {
       (async () => {
         try {
-          let text = await readAs("UTF-8");
-          // Si le fichier n'est pas en UTF-8 (ex : Windows-1252/ISO-8859-1 courants chez
-          // les banques françaises), on obtient des caractères de remplacement U+FFFD —
-          // on réessaie avec les encodages les plus probables jusqu'à ce que ça disparaisse.
-          for (const enc of ["windows-1252", "ISO-8859-1"]) {
-            if (!text.includes("�")) break;
-            text = await readAs(enc);
-          }
-          const txs = parseCSV(text, autoRules);
+          const txs = parseCSV(await readTextWithFallback(), autoRules);
           if (txs && txs.length > 0) {
             setParsedTxs(txs);
             setState("preview");
@@ -89,10 +98,35 @@ export default function Import() {
         }
       })();
     } else if (ext === "ofx" || ext === "qif") {
-      setParseError(`La lecture des fichiers .${ext} n'est pas encore disponible — elle est prévue, mais pas encore développée. Exportez un CSV ou un PDF depuis votre espace bancaire en attendant.`);
-      setState("error");
+      (async () => {
+        try {
+          const text = await readTextWithFallback();
+          const isOfx = ext === "ofx";
+          const { parse, looksLike } = isOfx
+            ? { parse: parseOFX, looksLike: looksLikeOfx }
+            : { parse: parseQIF, looksLike: looksLikeQif };
+
+          const txs = parse(text, autoRules);
+          if (txs && txs.length > 0) {
+            setParsedTxs(txs);
+            setState("preview");
+          } else if (looksLike(text)) {
+            // Le fichier est bien du format annoncé, mais ne contient aucun
+            // mouvement exploitable : le dire plutôt que de laisser croire à
+            // un format non reconnu.
+            setParseError(`Ce fichier ${ext.toUpperCase()} ne contient aucune transaction exploitable — il ne couvre peut-être qu'une période sans mouvement. Vérifiez la période exportée depuis votre espace bancaire.`);
+            setState("error");
+          } else {
+            setParseError(`Ce fichier ne ressemble pas à un export ${ext.toUpperCase()} valide, malgré son extension .${ext}. Réexportez-le depuis votre espace bancaire, ou essayez un CSV ou un PDF.`);
+            setState("error");
+          }
+        } catch {
+          setParseError("Impossible de lire le fichier.");
+          setState("error");
+        }
+      })();
     } else {
-      setParseError(`Format .${ext} non pris en charge. Formats lisibles aujourd'hui : PDF et CSV.`);
+      setParseError(`Format .${ext} non pris en charge. Formats lisibles : PDF, CSV, OFX et QIF.`);
       setState("error");
     }
   };

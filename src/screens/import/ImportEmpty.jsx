@@ -82,12 +82,6 @@ export default function ImportEmpty({ onFile, importHistory = [] }) {
         .ie-fmt-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px;
                        border-radius: 999px; background: var(--cream-200);
                        font-size: 11px; color: var(--ink-700); font-family: var(--font-mono); }
-        /* Format annoncé mais pas encore lisible : signalé comme tel plutôt que
-           présenté au même niveau que les formats réellement pris en charge. */
-        .ie-fmt-chip.soon { background: transparent; border: 1px dashed var(--line-strong);
-                            color: var(--ink-500); }
-        .ie-fmt-chip.soon .ie-fmt-soon { font-family: var(--font-sans); font-size: 9.5px;
-                                         text-transform: uppercase; letter-spacing: 0.06em; }
         .ie-trust { display: flex; align-items: center; gap: 6px; font-size: 11px;
                     color: var(--sage-500);
                     padding-top: 6px; border-top: 1px dashed var(--line); }
@@ -145,7 +139,7 @@ export default function ImportEmpty({ onFile, importHistory = [] }) {
       `}</style>
 
       {/* Input fichier caché — déclenché par le bouton */}
-      <input ref={fileRef} type="file" accept=".csv,.pdf,.txt"
+      <input ref={fileRef} type="file" accept=".csv,.pdf,.ofx,.qif,.txt"
              style={{ display: "none" }}
              onChange={e => { const f = e.target.files[0]; if (f) onFile(f); e.target.value = ""; }} />
 
@@ -209,12 +203,8 @@ export default function ImportEmpty({ onFile, importHistory = [] }) {
         <div className="ie-drop-formats">
           <span className="ie-fmt-chip">.pdf</span>
           <span className="ie-fmt-chip">.csv</span>
-          <span className="ie-fmt-chip soon" title="Lecture des fichiers OFX pas encore disponible — exportez un CSV ou un PDF en attendant">
-            .ofx <span className="ie-fmt-soon">bientôt</span>
-          </span>
-          <span className="ie-fmt-chip soon" title="Lecture des fichiers QIF pas encore disponible — exportez un CSV ou un PDF en attendant">
-            .qif <span className="ie-fmt-soon">bientôt</span>
-          </span>
+          <span className="ie-fmt-chip">.ofx</span>
+          <span className="ie-fmt-chip">.qif</span>
         </div>
         <div className="ie-trust">
           <IcLock size={11}/>
