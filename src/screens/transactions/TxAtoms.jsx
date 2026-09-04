@@ -43,6 +43,7 @@ export function TxFilterBar({ withChips = true, filter = "all", onChangeFilter =
                        catSel = [], onCatSelChange = () => {},
                        month = "Mai 2026", onMonthChange = () => {},
                        monthsOpt = [], catOpt = [] }) {
+  const monthDisabled = !!search;
   const segs = [
     { key: "all", label: "Tout",       n: counts.all },
     { key: "exp", label: "Dépenses",   n: counts.exp },
@@ -90,9 +91,16 @@ export function TxFilterBar({ withChips = true, filter = "all", onChangeFilter =
           {!search && <span className="tx-search-kbd">⌘F</span>}
         </div>
         <div ref={dateRef} style={{ position: "relative" }}>
-          <button className="tx-btn" onClick={() => setDateOpen(o => !o)}>
+          <button className="tx-btn" style={monthDisabled ? { opacity: 0.55 } : undefined}
+                  onClick={() => setDateOpen(o => !o)} title={monthDisabled ? "Filtre mois ignoré pendant une recherche" : undefined}>
             <IcCalendar size={14}/>{month} <IcChevDn size={12}/>
           </button>
+          {monthDisabled && (
+            <span style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, fontSize: 10,
+                           color: "var(--amber-500)", whiteSpace: "nowrap" }}>
+              ignoré · recherche sur toutes les périodes
+            </span>
+          )}
           {dateOpen && (
             <div style={{
               position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,

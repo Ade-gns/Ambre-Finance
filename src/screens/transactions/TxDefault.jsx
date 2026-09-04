@@ -72,7 +72,9 @@ export default function TxDefault({ onRowClick, onSelectMany, autoOpenAdd }) {
     const matchCat = catSel.length === 0 || catSel.includes(t.cat);
     const mNum = MONTH_NUM[month?.split(" ")[0]];
     const mYear = month?.split(" ")[1] ? parseInt(month.split(" ")[1], 10) : null;
-    const matchMonth = !mNum || (() => {
+    // Une recherche texte active ignore le filtre mois : sinon une transaction
+    // existante mais hors du mois affiché semble introuvable ("0 résultat").
+    const matchMonth = !!q || !mNum || (() => {
       const p = (t.d || "").split("/");
       if (p.length < 2) return false;
       const tMonth = parseInt(p[1], 10);
@@ -122,7 +124,7 @@ export default function TxDefault({ onRowClick, onSelectMany, autoOpenAdd }) {
                    catSel={catSel} onCatSelChange={setCatSel}
                    month={month} onMonthChange={setMonth}
                    monthsOpt={realMonths} catOpt={catDefs}/>
-      <TxSummaryReal txs={filtered} month={month} allCount={allTxs.length}/>
+      <TxSummaryReal txs={filtered} month={search ? "" : month} allCount={allTxs.length}/>
 
       <div className="tx-table">
         <TxTableHead sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
@@ -162,7 +164,7 @@ export default function TxDefault({ onRowClick, onSelectMany, autoOpenAdd }) {
                           color: "var(--ink-500)", fontSize: 13,
                           display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
               {search
-                ? <>Aucune transaction ne correspond à « {search} ».
+                ? <>Aucune transaction ne correspond à « {search} » (recherche sur toutes les périodes).
                     <span style={{ color: "var(--amber-500)", cursor: "pointer", marginLeft: 8 }}
                           onClick={() => setSearch("")}>Effacer</span></>
                 : <>

@@ -45,7 +45,9 @@ export default function TxBulk({ onClose, startIdx }) {
     const matchSearch = !q || (t.lbl || "").toLowerCase().includes(q) || (t.sub || "").toLowerCase().includes(q);
     const mNum  = MONTH_NUM[month?.split(" ")[0]];
     const mYear = month?.split(" ")[1] ? parseInt(month.split(" ")[1], 10) : null;
-    const matchMonth = !mNum || (() => {
+    // Une recherche texte active ignore le filtre mois : sinon une transaction
+    // existante mais hors du mois affiché semble introuvable ("0 résultat").
+    const matchMonth = !!q || !mNum || (() => {
       const p = (t.d || "").split("/");
       if (p.length < 2) return false;
       const tMonth = parseInt(p[1], 10);
@@ -143,10 +145,18 @@ export default function TxBulk({ onClose, startIdx }) {
       {/* Filtres bulk */}
       <div className="tx-bulk-filters">
         <div ref={monthRef} style={{ position: "relative" }}>
-          <button className="tx-btn" onClick={e => { e.stopPropagation(); setMonthOpen(o => !o); }}
+          <button className="tx-btn" style={search ? { opacity: 0.55 } : undefined}
+                  title={search ? "Filtre mois ignoré pendant une recherche" : undefined}
+                  onClick={e => { e.stopPropagation(); setMonthOpen(o => !o); }}
                   onMouseDown={e => e.stopPropagation()}>
             <IcCalendar size={13}/>{month || "Tous les mois"}<IcChevDn size={11}/>
           </button>
+          {search && (
+            <span style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, fontSize: 10,
+                           color: "var(--amber-500)", whiteSpace: "nowrap" }}>
+              ignoré · recherche sur toutes les périodes
+            </span>
+          )}
           {monthOpen && (
             <div className="tx-cat-picker" onClick={e => e.stopPropagation()}
                  onMouseDown={e => e.stopPropagation()}>
