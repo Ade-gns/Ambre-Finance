@@ -231,16 +231,18 @@ export default function Onboarding() {
           </div>
           <div className="ob-drop-t">Glissez un relevé ici</div>
           <div className="ob-drop-s">
-            PDF, CSV, OFX ou QIF — la plupart des banques françaises sont reconnues.
+            PDF ou CSV — la plupart des banques françaises sont reconnues.
           </div>
-          <input ref={fileRef} type="file" accept=".pdf,.csv,.ofx,.qif"
+          <input ref={fileRef} type="file" accept=".pdf,.csv"
                  style={{ display: "none" }}
                  onChange={e => handleFiles(e.target.files)}/>
           <button className="ob-drop-btn" onClick={() => fileRef.current?.click()}>
             <IcUpload size={14}/>Parcourir mes fichiers
           </button>
           <div className="ob-drop-fmt">
-            <span>.pdf</span><span>.csv</span><span>.ofx</span><span>.qif</span>
+            <span>.pdf</span><span>.csv</span>
+            <span className="soon" title="Lecture des fichiers OFX pas encore disponible">.ofx bientôt</span>
+            <span className="soon" title="Lecture des fichiers QIF pas encore disponible">.qif bientôt</span>
           </div>
         </div>
 
@@ -356,6 +358,10 @@ const OB_STYLES = `
                         padding: 2px 8px;
                         background: var(--cream-200); color: var(--ink-700);
                         border-radius: 999px; }
+  /* Format annoncé mais pas encore lisible — distingué visuellement des
+     formats réellement pris en charge. */
+  .ob-drop-fmt > span.soon { background: transparent; color: var(--ink-500);
+                             border: 1px dashed var(--line-strong); }
 
   .ob-alt { display: flex; align-items: center; gap: 10px;
             padding: 14px 16px;

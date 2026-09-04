@@ -4,7 +4,7 @@ import { useTransactions, useCategories } from "../lib/store";
 import { fmtEUR } from "../lib/chartUtils";
 
 const ACTIONS = [
-  { kind: "action", id: "import",  label: "Importer un relevé bancaire", sub: "CSV, OFX…",              icon: "↑" },
+  { kind: "action", id: "import",  label: "Importer un relevé bancaire", sub: "PDF, CSV",              icon: "↑" },
   { kind: "action", id: "add-tx",  label: "Ajouter une transaction",      sub: "Saisie manuelle",        icon: "+" },
   { kind: "action", id: "add-cat", label: "Créer une catégorie",          sub: "Avec règle optionnelle", icon: "⊕" },
   { kind: "action", id: "export",  label: "Exporter mes données",         sub: "CSV",                    icon: "↓" },

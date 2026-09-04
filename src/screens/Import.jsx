@@ -89,10 +89,10 @@ export default function Import() {
         }
       })();
     } else if (ext === "ofx" || ext === "qif") {
-      setParseError(`La lecture des fichiers .${ext} nécessite le moteur Rust (en développement). Exportez un CSV depuis votre espace bancaire en attendant.`);
+      setParseError(`La lecture des fichiers .${ext} n'est pas encore disponible — elle est prévue, mais pas encore développée. Exportez un CSV ou un PDF depuis votre espace bancaire en attendant.`);
       setState("error");
     } else {
-      setParseError(`Format .${ext} non pris en charge. Formats acceptés : CSV, PDF, OFX, QIF.`);
+      setParseError(`Format .${ext} non pris en charge. Formats lisibles aujourd'hui : PDF et CSV.`);
       setState("error");
     }
   };

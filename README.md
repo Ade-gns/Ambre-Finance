@@ -10,7 +10,7 @@ Application desktop open source pour suivre, analyser et comprendre vos dépense
 Vue mensuelle synthétique : total des dépenses, revenus, solde net, progression par rapport au mois précédent et jauge budgétaire. Graphique en barres des 12 derniers mois navigable mois par mois.
 
 ### Import
-Importation de relevés bancaires au format CSV. Aperçu dynamique des transactions avant confirmation, avec détection automatique du séparateur et du format de date.
+Importation de relevés bancaires aux formats PDF et CSV. Aperçu dynamique des transactions avant confirmation, avec détection automatique du séparateur et du format de date pour le CSV, et gabarits dédiés à neuf banques françaises pour le PDF (repli générique pour les autres). Les formats OFX et QIF ne sont pas encore lus.
 
 ### Transactions
 Liste complète de toutes les transactions avec recherche full-text, filtres par mois, catégorie et type (dépense / revenu). Sélection multiple pour actions groupées. Détail de chaque transaction avec ré-affectation de catégorie.
@@ -121,7 +121,7 @@ L'installeur est généré dans `src-tauri/target/release/bundle/`.
 
 Au premier démarrage, l'écran **Onboarding** s'affiche. Deux options :
 
-- **Importer un relevé CSV** — glisser-déposer ou sélectionner un fichier `.csv` exporté depuis votre banque.
+- **Importer un relevé** — glisser-déposer ou sélectionner un fichier `.pdf` ou `.csv` exporté depuis votre banque.
 - **Charger l'exemple** — charge 92 transactions fictives (fév.–mai 2026) pour explorer l'interface. Ces données sont automatiquement effacées au prochain redémarrage.
 
 ---
