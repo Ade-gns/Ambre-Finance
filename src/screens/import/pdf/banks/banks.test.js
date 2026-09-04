@@ -153,6 +153,18 @@ describe("Caisse d'Épargne", () => {
   });
 });
 
+describe("LCL", () => {
+  it("détecte la banque et extrait les transactions", async () => {
+    const { bank, lines } = await parseStatement(genericHeader, [
+      row("12/03/2026", "TOTAL ENERGIES", { debit: "61,00" }),
+    ], ["LCL", "RELEVE DE COMPTE"]);
+    expect(bank?.id).toBe("lcl");
+    const rows = parseWithBank(bank, lines);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ lblRaw: "TOTAL ENERGIES", amt: -61 });
+  });
+});
+
 describe("cohérence du registre", () => {
   it("chaque banque a un id, un label et une fonction detect", () => {
     for (const bank of BANKS) {
