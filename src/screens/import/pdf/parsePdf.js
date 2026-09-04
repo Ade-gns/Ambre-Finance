@@ -11,7 +11,7 @@ import { extractPositionedText, PdfPasswordError } from "./textExtract";
 import { groupIntoLines, lineText } from "./lineReconstruct";
 import { detectBank, parseWithBank } from "./banks/index";
 import { tryGenericColumns, fallbackLineByLine } from "./genericParser";
-import { autoCat, applyRules } from "../../../lib/store";
+import { categorizeTx } from "../csvParser";
 
 /**
  * @returns {Promise<
@@ -53,11 +53,10 @@ export async function parsePdfBankStatement(arrayBuffer, rules = []) {
 
   const transactions = rawRows.map(r => {
     const lbl = r.lblRaw.replace(/\s+/g, " ").trim();
-    const ruleCat  = applyRules(rules, lbl);
-    const detected = ruleCat || autoCat(lbl, r.amt);
-    const finalCat = detected === "aut" ? null : detected;
-    const conf     = ruleCat ? "high" : (detected && detected !== "aut") ? "med" : "none";
-    return { d: r.d, lbl, sub: "", cat: finalCat, conf, amt: r.amt, tpl };
+    // Un PDF ne porte pas de catégorie bancaire exploitable : règle
+    // utilisateur puis détection automatique, via la logique partagée.
+    const { cat, conf } = categorizeTx(lbl, r.amt, rules);
+    return { d: r.d, lbl, sub: "", cat, conf, amt: r.amt, tpl };
   });
 
   return { transactions, bankId: bank?.id || null, tpl };

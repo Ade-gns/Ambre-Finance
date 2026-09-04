@@ -131,6 +131,30 @@ export function mapBankCat(raw) {
   return null;
 }
 
+/**
+ * Catégorie et niveau de confiance d'une transaction importée — logique
+ * commune à tous les formats d'entrée (CSV, PDF, OFX, QIF) pour qu'un même
+ * libellé soit classé de la même façon quelle que soit la provenance.
+ *
+ * Ordre de priorité : catégorie fournie par la banque (si elle se mappe sur
+ * une catégorie Ambre) > règle utilisateur > détection automatique.
+ *
+ * @param {string} lbl         libellé de la transaction
+ * @param {number} amt         montant signé (oriente autoCat)
+ * @param {Array}  rules       règles automatiques de l'utilisateur
+ * @param {string} bankCatRaw  catégorie brute fournie par la banque, si le format en porte une
+ * @returns {{ cat: string|null, conf: "high"|"med"|"none" }}
+ */
+export function categorizeTx(lbl, amt, rules = [], bankCatRaw = "") {
+  const bankMapped = mapBankCat(bankCatRaw);
+  const ruleCat    = bankMapped ? null : applyRules(rules, lbl);
+  const detected   = bankMapped || ruleCat || autoCat(lbl, amt);
+  return {
+    cat:  detected === "aut" ? null : detected,
+    conf: bankMapped ? "high" : ruleCat ? "high" : (detected && detected !== "aut") ? "med" : "none",
+  };
+}
+
 export function simplifyLabel(lbl) {
   return (lbl || "")
     .normalize("NFD").replace(/[̀-ͯ]/g, "")
@@ -233,18 +257,14 @@ export function parseCSV(rawText, rules = []) {
     }
     if (isNaN(amt) || amt === 0) continue;
 
-    const bankCat      = catIdx !== -1 ? (cells[catIdx] || "").replace(/"/g, "").trim() : "";
-    const bankMappedCat = mapBankCat(bankCat);
-    const ruleCat      = bankMappedCat ? null : applyRules(rules, lbl);
-    const detected     = bankMappedCat || ruleCat || autoCat(lbl, amt);
-    const finalCat     = detected === "aut" ? null : detected;
-    const conf         = bankMappedCat ? "high" : ruleCat ? "high" : (detected && detected !== "aut") ? "med" : "none";
+    const bankCat = catIdx !== -1 ? (cells[catIdx] || "").replace(/"/g, "").trim() : "";
+    const { cat, conf } = categorizeTx(lbl, amt, rules, bankCat);
 
     txs.push({
       d:    normalizeDate(cells[eDateIdx] || ""),
       lbl,
       sub:  subIdx !== -1 ? (cells[subIdx] || "").replace(/"/g, "").trim() : bankCat,
-      cat:  finalCat,
+      cat,
       conf,
       amt,
     });
