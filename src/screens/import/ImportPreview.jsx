@@ -20,8 +20,15 @@ export default function ImportPreview({ onConfirm, onCancel, txs, fileName, file
   const [newCatName, setNewCatName]     = useState("");
   const [newCatColor, setNewCatColor]   = useState("#b8693d");
 
+  // Même règle que dans l'écran Catégories : pas deux catégories au même nom
+  // à la casse et aux espaces près, sinon elles sont indistinguables ensuite.
+  const normCatName = s => (s || "").trim().replace(/\s+/g, " ").toLowerCase();
+  const duplicateCat = newCatName.trim()
+    ? categories.find(c => normCatName(c.label) === normCatName(newCatName))
+    : null;
+
   const createAndAssignCat = rowIdx => {
-    if (!newCatName.trim()) return;
+    if (!newCatName.trim() || duplicateCat) return;
     const id = "usr_" + Date.now();
     setCategories(prev => [...prev, { id, label: newCatName.trim(), color: newCatColor, budget: 0, iconIdx: 0 }]);
     setCatOverrides(prev => ({ ...prev, [rowIdx]: id }));
@@ -360,10 +367,19 @@ export default function ImportPreview({ onConfirm, onCancel, txs, fileName, file
                                   }}/>
                                 ))}
                               </div>
-                              <button onClick={() => createAndAssignCat(origIdx)} style={{
+                              {duplicateCat && (
+                                <div style={{ fontSize: 10.5, color: "var(--rose-500)", marginBottom: 6, lineHeight: 1.35 }}>
+                                  « {duplicateCat.label} » existe déjà — choisissez-la dans la liste
+                                  ci-dessus ou saisissez un autre nom.
+                                </div>
+                              )}
+                              <button onClick={() => createAndAssignCat(origIdx)}
+                                title={duplicateCat ? "Ce nom est déjà utilisé par une catégorie existante" : undefined}
+                                style={{
                                 width: "100%", padding: "5px 8px", borderRadius: 6, border: "none",
                                 background: "var(--amber-500)", color: "var(--cream-50)",
-                                fontSize: 11, cursor: "pointer", fontWeight: 500,
+                                fontSize: 11, cursor: duplicateCat ? "not-allowed" : "pointer", fontWeight: 500,
+                                opacity: newCatName.trim() && !duplicateCat ? 1 : 0.5,
                               }}>Créer</button>
                             </div>
                           ) : (

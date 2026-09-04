@@ -233,8 +233,17 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
     if (next) onSelectCat(next.id);
   };
 
+  // Deux catégories de même nom sont indistinguables dans les listes et les
+  // règles : on compare sans tenir compte de la casse ni des espaces superflus
+  // (« alimentation  » et « Alimentation » sont un doublon).
+  const normCatName = s => (s || "").trim().replace(/\s+/g, " ").toLowerCase();
+  const duplicateCat = newName.trim()
+    ? allCatsUnfiltered.find(c => normCatName(c.label) === normCatName(newName))
+    : null;
+  const canCreateCat = !!newName.trim() && !duplicateCat;
+
   const createCat = () => {
-    if (!newName.trim()) return;
+    if (!canCreateCat) return;
     const id = "usr_" + Date.now();
     const newCat = { id, label: newName.trim(), color: newColor, budget: 0, iconIdx: 0, amount: 0, share: 0, desc: "" };
     if (setCategories) setCategories(prev => [...prev, newCat]);
@@ -627,6 +636,12 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
                   onKeyDown={e => e.key === "Enter" && createCat()}
                   autoFocus
                 />
+                {duplicateCat && (
+                  <div style={{ fontSize: 11.5, color: "var(--rose-500)", marginTop: 6, lineHeight: 1.4 }}>
+                    La catégorie « {duplicateCat.label} » existe déjà. Choisissez un autre nom
+                    pour éviter deux catégories indistinguables.
+                  </div>
+                )}
               </div>
               <div>
                 <label style={{ fontSize: 11, color: "var(--ink-600)", textTransform: "uppercase",
@@ -662,7 +677,8 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
               <button
                 className="cm-btn amber"
                 onClick={createCat}
-                style={{ opacity: newName.trim() ? 1 : 0.5 }}>
+                title={duplicateCat ? "Ce nom est déjà utilisé par une catégorie existante" : undefined}
+                style={{ opacity: canCreateCat ? 1 : 0.5 }}>
                 <IcPlus size={13}/>Créer
               </button>
             </div>
