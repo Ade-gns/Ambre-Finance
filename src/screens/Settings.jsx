@@ -10,6 +10,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useLocalStorage } from "../lib/storage";
 import { useTransactions, useCategories, useImportHistory, useAutoRules, useAlertDefs, DEFAULT_CATS, txMonthKey, parseTxDate, computeAlertNotifs } from "../lib/store";
 import { fmtEUR } from "../lib/chartUtils";
+import { useEscapeKey } from "../lib/useEscapeKey";
 import {
   IcSettings, IcWallet, IcTag, IcBell, IcLock, IcSun, IcDot,
   IcChevDn, IcPlus, IcImport, IcUpload
@@ -341,6 +342,10 @@ function SettingsAccounts() {
   const [newAccBank, setNewAccBank]   = useState("");
   const [newAccType, setNewAccType]   = useState("Courant");
   const [newAccColor, setNewAccColor] = useState("#b8693d");
+
+  // Échap ferme le modal sans créer le compte en cours de saisie.
+  useEscapeKey(showAddAccount, () => setShowAddAccount(false));
+
   const createAccount = () => {
     if (!newAccName.trim() || !newAccBank.trim()) return;
     setAccounts(prev => [...(prev || []), {

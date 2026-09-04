@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useCategories, autoCat } from "../../lib/store";
+import { useEscapeKey } from "../../lib/useEscapeKey";
 
 /* ─────────────────────────────────────────────────────────────────
    Modal d'ajout manuel de transaction
@@ -31,6 +32,10 @@ export default function TxAddModal({ onClose, onAdd }) {
     document.addEventListener("mousedown", fn);
     return () => document.removeEventListener("mousedown", fn);
   }, [catOpen]);
+
+  // Échap : referme d'abord le picker catégorie s'il est ouvert, sinon le
+  // modal — sans rien soumettre, comme un clic sur le fond de l'overlay.
+  useEscapeKey(true, () => (catOpen ? setCatOpen(false) : onClose()));
 
   // Auto-catégorise quand le libellé change
   const handleLblChange = val => {

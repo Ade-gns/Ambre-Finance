@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useTransactions, useCategories, useAutoRules, applyRules, reapplyRules } from "../../lib/store";
 import { IcPlus } from "../../lib/icons";
+import { useEscapeKey } from "../../lib/useEscapeKey";
 import { simplifyLabel } from "./csvParser";
 
 /* ─────────────────────────────────────────────────────────────────
@@ -11,6 +12,9 @@ export default function RulesConfigModal({ txs, existingRules, onSave, onClose }
   const [, setTransactions] = useTransactions();
   const [autoRulesStore, setAutoRulesStore] = useAutoRules();
   const catById = Object.fromEntries(categories.map(c => [c.id, c]));
+
+  // Échap ferme le modal sans enregistrer les règles en cours d'édition.
+  useEscapeKey(true, onClose);
 
   const suggestions = useMemo(() => {
     const seen = new Map();

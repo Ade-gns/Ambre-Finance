@@ -7,6 +7,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTransactions, useCategories, useAutoRules, applyRules, reapplyRules, computeCatTotals, DEFAULT_CATS, txMonthKey, monthKeyLabel, monthKeyShort, txMonths, autoCat } from "../lib/store";
 import { fmtEUR, pathSmooth } from "../lib/chartUtils";
+import { useEscapeKey } from "../lib/useEscapeKey";
 import {
   IcSearch, IcCalendar, IcFilter, IcArrowR, IcChevDn,
   IcPlus, IcTag, IcSettings, IcChart, IcWallet
@@ -137,6 +138,11 @@ function CatManage({ selectedCatId, onSelectCat, onSeeDetail, onSeeEmpty, catsWi
   useEffect(() => { if (autoOpenRuleForm) setRuleFormOpen(true); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- fires once on mount
   const [newWhen, setNewWhen]           = useState("libellé contient");
   const [newOp, setNewOp]               = useState("");
+
+  // Échap ferme le modal ouvert, sans créer la catégorie ni la règle en cours
+  // de saisie — même effet qu'un clic sur le fond de l'overlay.
+  useEscapeKey(newOpen, () => setNewOpen(false));
+  useEscapeKey(ruleFormOpen, () => setRuleFormOpen(false));
 
   const whenFromMatchType = mt => mt === "exact" ? "marchand =" : "libellé contient";
   const matchTypeFromWhen = w  => w  === "marchand =" ? "exact" : "contains";
